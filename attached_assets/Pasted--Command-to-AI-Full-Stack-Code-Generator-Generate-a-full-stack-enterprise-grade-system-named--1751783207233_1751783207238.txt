@@ -1,0 +1,76 @@
+# Command to AI Full Stack Code Generator
+
+"Generate a full-stack enterprise-grade system named **'THE SUPERVISOR'**. The system must run on three platforms: Web, Mobile (iOS & Android), and Desktop (Windows/macOS/Linux), using the same backend.
+
+## Overview:
+This is a hierarchical performance reporting and feedback platform for organizations with 10+ employees. The system tracks tasks, performance metrics, and reporting from employees to supervisors, to managers, and finally to executives.
+
+## Tech Stack:
+- Frontend (Web): React.js + Tailwind CSS
+- Mobile App: React Native + Expo
+- Desktop App: Electron.js
+- Backend: Node.js with Express
+- Database: MongoDB with Mongoose
+- Authentication: JWT + optional 2FA
+- Hosting: Docker-ready deployment
+
+## Key Features:
+1. **User Roles & Permissions**:
+   - Roles: Employee, Supervisor, Manager, Executive
+   - RBAC (Role-Based Access Control)
+   - Each user account links to a superior (hierarchical tree)
+
+2. **Performance Reports**:
+   - Structured Forms (task completion, deadlines, feedback)
+   - Group Submission (like WhatsApp groups)
+   - Supervisor feedback, revision loop
+
+3. **Dashboards**:
+   - Role-specific dashboards
+   - Real-time notifications and alerts
+   - Custom performance metrics
+
+4. **Data Visualization**:
+   - Charts, graphs for task progress, metrics
+   - Summary reports auto-generated for each level
+
+5. **Field Work Support**:
+   - Geo-location tracking on form submission
+   - Allow image uploads as report evidence (e.g., photos of work done)
+
+6. **Security**:
+   - Secure login, RBAC, encrypted data in transit and at rest
+   - Audit logs of all activity
+
+7. **Notifications System**:
+   - Real-time alerts
+   - Email and in-app reminders
+   - Missed-deadline custom triggers
+
+8. **Scalability**:
+   - Modular, scalable architecture for thousands of users
+   - CI/CD pipeline ready
+
+9. **Cross-Platform**:
+   - Unified UX across web, mobile, desktop
+   - Responsive layouts & hybrid compatibility
+
+10. **Analytics Engine**:
+    - Aggregate and visualize trends for management
+    - Exportable reports (PDF, Excel)
+
+## Deliverables:
+- React Web Frontend
+- React Native App for iOS/Android
+- Electron Desktop App
+- Express.js Backend APIs
+- MongoDB Schema Models
+- Admin Dashboard for configuration
+- Setup Instructions (README)
+- Dockerfile for deployment
+
+## Ownership:
+All rights reserved by OMULE BRIAN FREDRICK, Bachelor of Computer Science Engineering, Victoria University Kampala, 2024/2026.
+
+Please generate the entire codebase, API endpoints, documentation, and setup guides in an organized folder structure.
+"
