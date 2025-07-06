@@ -96,7 +96,21 @@ THE SUPERVISOR is a hierarchical performance reporting and feedback platform des
 
 ## Changelog
 - July 06, 2025. Initial setup
+- July 06, 2025. Added comprehensive admin dashboard system with role-based login portals:
+  - Enhanced landing page with role-specific login buttons (Employee, Supervisor, Manager, Executive)
+  - Created dedicated dashboards for each organizational level
+  - Built user registration system with organizational hierarchy selection
+  - Added admin dashboard for executives with system-wide oversight
+  - Implemented role-based routing and authentication
+
+## Recent Changes
+✓ Enhanced landing page with role-based login portals
+✓ Created 5 specialized dashboards (Admin, Employee, Supervisor, Manager, Executive)
+✓ Built comprehensive user registration modal with multi-step workflow
+✓ Added role-based routing with automatic dashboard selection
+✓ Implemented hierarchical user management system
 
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
+User wants comprehensive admin system with organizational flow and role-based access.

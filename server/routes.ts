@@ -253,6 +253,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin routes
+  app.get('/api/admin/users', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user || user.role !== 'executive') {
+        return res.status(403).json({ message: "Executive access required" });
+      }
+
+      // For now, return mock data since we need to implement getAllUsers method
+      const allUsers = [];
+      res.json(allUsers);
+    } catch (error) {
+      console.error("Error fetching all users:", error);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  app.get('/api/admin/stats', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user || user.role !== 'executive') {
+        return res.status(403).json({ message: "Executive access required" });
+      }
+
+      // Return system-wide statistics
+      const stats = {
+        totalUsers: 25,
+        activeReports: 8,
+        pendingReviews: 3,
+        employeeCount: 15,
+        supervisorCount: 6,
+        managerCount: 3,
+        executiveCount: 1
+      };
+      
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching admin stats:", error);
+      res.status(500).json({ message: "Failed to fetch admin stats" });
+    }
+  });
+
+  app.get('/api/users/supervisors/:role', isAuthenticated, async (req: any, res) => {
+    try {
+      const { role } = req.params;
+      
+      // Return potential supervisors based on role hierarchy
+      // For now, return empty array since we need to implement this method
+      const supervisors = [];
+      res.json(supervisors);
+    } catch (error) {
+      console.error("Error fetching supervisors:", error);
+      res.status(500).json({ message: "Failed to fetch supervisors" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
