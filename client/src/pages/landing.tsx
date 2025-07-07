@@ -121,11 +121,12 @@ export default function Landing() {
             return (
               <Card 
                 key={index} 
-                className={`hover:shadow-xl transition-all duration-300 cursor-pointer border-2 ${card.borderColor} bg-white hover:scale-105`}
+                className={`hover:shadow-xl transition-all duration-300 cursor-pointer border-2 ${card.borderColor} bg-white hover:scale-105 animate-fade-in glass-card`}
+                style={{ animationDelay: `${index * 0.1}s` }}
                 onClick={() => handleRoleBasedLogin(card.role)}
               >
                 <CardHeader className="text-center pb-4">
-                  <div className={`w-16 h-16 ${card.color} bg-opacity-10 rounded-full flex items-center justify-center mx-auto mb-4`}>
+                  <div className={`w-16 h-16 ${card.color} bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg animate-bounce-gentle`}>
                     <Icon className={`h-8 w-8 ${card.textColor}`} />
                   </div>
                   <CardTitle className="text-xl font-semibold text-gray-900">
@@ -136,14 +137,14 @@ export default function Landing() {
                 <CardContent className="pt-0">
                   <ul className="space-y-2 mb-6">
                     {card.features.map((feature, idx) => (
-                      <li key={idx} className="flex items-center text-sm text-gray-600">
-                        <ChevronRight className="w-4 h-4 mr-2 text-gray-400" />
+                      <li key={idx} className="flex items-center text-sm text-gray-600 animate-slide-up" style={{ animationDelay: `${(index * 0.1) + (idx * 0.05)}s` }}>
+                        <ChevronRight className="w-4 h-4 mr-2 text-gray-400 transition-transform group-hover:translate-x-1" />
                         {feature}
                       </li>
                     ))}
                   </ul>
                   <Button 
-                    className={`w-full ${card.color} text-white hover:opacity-90`}
+                    className={`w-full ${card.color} text-white hover:opacity-90 transition-all duration-200 hover:scale-105`}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleRoleBasedLogin(card.role);
