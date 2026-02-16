@@ -8,6 +8,7 @@ import Landing from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
 import Reports from "@/pages/reports";
 import Team from "@/pages/team";
+import Settings from "@/pages/settings";
 import AdminDashboard from "@/pages/admin-dashboard";
 import EmployeeDashboard from "@/pages/employee-dashboard";
 import SupervisorDashboard from "@/pages/supervisor-dashboard";
@@ -73,6 +74,7 @@ function Router() {
           <Route path="/reports" component={Reports} />
           <Route path="/team" component={Team} />
           <Route path="/dashboard" component={Dashboard} />
+          <Route path="/settings" component={Settings} />
         </>
       )}
       <Route component={NotFound} />
