@@ -24,6 +24,9 @@ export interface IStorage {
   getUserWithRelations(id: string): Promise<UserWithRelations | undefined>;
   getSubordinates(supervisorId: string): Promise<User[]>;
   updateUserRole(id: string, role: string, supervisorId?: string): Promise<User | undefined>;
+  getAllUsers(): Promise<User[]>;
+  getUsersByRole(role: string): Promise<User[]>;
+  getSupervisorsForRole(role: string): Promise<User[]>;
   
   // Report operations
   createReport(report: InsertReport): Promise<Report>;
@@ -44,7 +47,7 @@ export interface IStorage {
   markNotificationAsRead(id: number): Promise<void>;
   getUnreadNotificationCount(userId: string): Promise<number>;
   
-  // Dashboard stats
+  // Dashboard stats & admin
   getDashboardStats(userId: string, role: string): Promise<{
     pendingReviews?: number;
     teamMembers?: number;
@@ -52,6 +55,15 @@ export interface IStorage {
     averageRating?: number;
     myReports?: number;
     myAverageRating?: number;
+  }>;
+  getSystemStats(): Promise<{
+    totalUsers: number;
+    activeReports: number;
+    pendingReviews: number;
+    employeeCount: number;
+    supervisorCount: number;
+    managerCount: number;
+    executiveCount: number;
   }>;
 }
 
@@ -112,6 +124,35 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, id))
       .returning();
     return user;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return await db.select().from(users).orderBy(users.createdAt);
+  }
+
+  async getUsersByRole(role: string): Promise<User[]> {
+    return await db.select().from(users).where(eq(users.role, role));
+  }
+
+  async getSupervisorsForRole(role: string): Promise<User[]> {
+    // Return users who can supervise this role based on hierarchy
+    const supervisorRoles: Record<string, string[]> = {
+      'employee': ['supervisor', 'manager', 'executive'],
+      'supervisor': ['manager', 'executive'],
+      'manager': ['executive'],
+      'executive': []
+    };
+    
+    const validRoles = supervisorRoles[role] || [];
+    if (validRoles.length === 0) return [];
+
+    return await db
+      .select()
+      .from(users)
+      .where((where) => {
+        const conditions = validRoles.map(r => eq(users.role, r));
+        return conditions.length > 0 ? conditions[0] : undefined;
+      });
   }
 
   // Report operations
