@@ -13,7 +13,7 @@ import {
   type ReportWithRelations,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, count, avg, gte, lte } from "drizzle-orm";
+import { eq, desc, and, or, count, avg, gte, lte } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (mandatory for Replit Auth)
@@ -146,13 +146,11 @@ export class DatabaseStorage implements IStorage {
     const validRoles = supervisorRoles[role] || [];
     if (validRoles.length === 0) return [];
 
+    const conditions = validRoles.map(r => eq(users.role, r));
     return await db
       .select()
       .from(users)
-      .where((where) => {
-        const conditions = validRoles.map(r => eq(users.role, r));
-        return conditions.length > 0 ? conditions[0] : undefined;
-      });
+      .where(or(...conditions));
   }
 
   // Report operations
@@ -363,6 +361,60 @@ export class DatabaseStorage implements IStorage {
     stats.myAverageRating = myAvgResult.avg ? parseFloat(myAvgResult.avg) : 0;
 
     return stats;
+  }
+
+  async getSystemStats(): Promise<{
+    totalUsers: number;
+    activeReports: number;
+    pendingReviews: number;
+    employeeCount: number;
+    supervisorCount: number;
+    managerCount: number;
+    executiveCount: number;
+  }> {
+    const [totalUsersResult] = await db
+      .select({ count: count() })
+      .from(users);
+
+    const [activeReportsResult] = await db
+      .select({ count: count() })
+      .from(reports)
+      .where(eq(reports.status, 'pending'));
+
+    const [pendingReviewsResult] = await db
+      .select({ count: count() })
+      .from(reports)
+      .where(eq(reports.status, 'pending'));
+
+    const [employeeCountResult] = await db
+      .select({ count: count() })
+      .from(users)
+      .where(eq(users.role, 'employee'));
+
+    const [supervisorCountResult] = await db
+      .select({ count: count() })
+      .from(users)
+      .where(eq(users.role, 'supervisor'));
+
+    const [managerCountResult] = await db
+      .select({ count: count() })
+      .from(users)
+      .where(eq(users.role, 'manager'));
+
+    const [executiveCountResult] = await db
+      .select({ count: count() })
+      .from(users)
+      .where(eq(users.role, 'executive'));
+
+    return {
+      totalUsers: totalUsersResult.count,
+      activeReports: activeReportsResult.count,
+      pendingReviews: pendingReviewsResult.count,
+      employeeCount: employeeCountResult.count,
+      supervisorCount: supervisorCountResult.count,
+      managerCount: managerCountResult.count,
+      executiveCount: executiveCountResult.count,
+    };
   }
 }
 

@@ -263,8 +263,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Executive access required" });
       }
 
-      // For now, return mock data since we need to implement getAllUsers method
-      const allUsers = [];
+      const allUsers = await storage.getAllUsers();
       res.json(allUsers);
     } catch (error) {
       console.error("Error fetching all users:", error);
@@ -281,17 +280,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Executive access required" });
       }
 
-      // Return system-wide statistics
-      const stats = {
-        totalUsers: 25,
-        activeReports: 8,
-        pendingReviews: 3,
-        employeeCount: 15,
-        supervisorCount: 6,
-        managerCount: 3,
-        executiveCount: 1
-      };
-      
+      const stats = await storage.getSystemStats();
       res.json(stats);
     } catch (error) {
       console.error("Error fetching admin stats:", error);
@@ -302,10 +291,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/users/supervisors/:role', isAuthenticated, async (req: any, res) => {
     try {
       const { role } = req.params;
-      
-      // Return potential supervisors based on role hierarchy
-      // For now, return empty array since we need to implement this method
-      const supervisors = [];
+      const supervisors = await storage.getSupervisorsForRole(role);
       res.json(supervisors);
     } catch (error) {
       console.error("Error fetching supervisors:", error);

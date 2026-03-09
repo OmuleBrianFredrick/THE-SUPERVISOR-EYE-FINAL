@@ -10,6 +10,7 @@ import Reports from "@/pages/reports";
 import Team from "@/pages/team";
 import Settings from "@/pages/settings";
 import AdminDashboard from "@/pages/admin-dashboard";
+import AdminUsers from "@/pages/admin-users";
 import EmployeeDashboard from "@/pages/employee-dashboard";
 import SupervisorDashboard from "@/pages/supervisor-dashboard";
 import ManagerDashboard from "@/pages/manager-dashboard";
@@ -65,6 +66,7 @@ function Router() {
           
           {/* Role-specific Dashboards */}
           <Route path="/admin-dashboard" component={AdminDashboard} />
+          <Route path="/admin-users" component={AdminUsers} />
           <Route path="/employee-dashboard" component={EmployeeDashboard} />
           <Route path="/supervisor-dashboard" component={SupervisorDashboard} />
           <Route path="/manager-dashboard" component={ManagerDashboard} />

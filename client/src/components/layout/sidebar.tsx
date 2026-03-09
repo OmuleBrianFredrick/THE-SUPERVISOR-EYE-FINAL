@@ -88,6 +88,7 @@ export default function Sidebar() {
       ],
       executive: [
         { name: "Admin Dashboard", href: "/admin-dashboard", icon: Shield, badge: null },
+        { name: "User Management", href: "/admin-users", icon: Users, badge: null },
         { name: "System Analytics", href: "/system-analytics", icon: BarChart3, badge: null },
         { name: "Organization Health", href: "/org-health", icon: Activity, badge: null },
       ]
