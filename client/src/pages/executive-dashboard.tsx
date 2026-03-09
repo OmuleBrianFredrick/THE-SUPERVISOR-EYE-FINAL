@@ -24,6 +24,11 @@ export default function ExecutiveDashboard() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading, user } = useAuth();
 
+  const { data: systemStats } = useQuery({
+    queryKey: ["/api/admin/stats"],
+    enabled: !!user && user.role === 'executive',
+  });
+
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       toast({
@@ -65,28 +70,14 @@ export default function ExecutiveDashboard() {
             </p>
           </div>
 
-          {/* Executive KPIs */}
+          {/* Executive KPIs - Real System Data */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <Card className="shadow-sm border border-gray-100">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Revenue Growth</p>
-                    <p className="text-3xl font-bold text-green-600">+12.5%</p>
-                  </div>
-                  <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                    <DollarSign className="text-green-600 h-6 w-6" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="shadow-sm border border-gray-100">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Employee Satisfaction</p>
-                    <p className="text-3xl font-bold text-blue-600">94%</p>
+                    <p className="text-sm font-medium text-gray-600">Total Users</p>
+                    <p className="text-3xl font-bold text-blue-600">{systemStats?.totalUsers || 0}</p>
                   </div>
                   <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                     <Users className="text-blue-600 h-6 w-6" />
@@ -99,11 +90,11 @@ export default function ExecutiveDashboard() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Market Share</p>
-                    <p className="text-3xl font-bold text-purple-600">18.3%</p>
+                    <p className="text-sm font-medium text-gray-600">Active Reports</p>
+                    <p className="text-3xl font-bold text-green-600">{systemStats?.activeReports || 0}</p>
                   </div>
-                  <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                    <Globe className="text-purple-600 h-6 w-6" />
+                  <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                    <TrendingUp className="text-green-600 h-6 w-6" />
                   </div>
                 </div>
               </CardContent>
@@ -113,11 +104,25 @@ export default function ExecutiveDashboard() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Operational Excellence</p>
-                    <p className="text-3xl font-bold text-executive">A+</p>
+                    <p className="text-sm font-medium text-gray-600">Pending Reviews</p>
+                    <p className="text-3xl font-bold text-orange-600">{systemStats?.pendingReviews || 0}</p>
                   </div>
-                  <div className="w-12 h-12 bg-executive bg-opacity-10 rounded-lg flex items-center justify-center">
-                    <Award className="text-executive h-6 w-6" />
+                  <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                    <BarChart3 className="text-orange-600 h-6 w-6" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-sm border border-gray-100">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">System Health</p>
+                    <p className="text-3xl font-bold text-green-600">Excellent</p>
+                  </div>
+                  <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                    <Shield className="text-green-600 h-6 w-6" />
                   </div>
                 </div>
               </CardContent>

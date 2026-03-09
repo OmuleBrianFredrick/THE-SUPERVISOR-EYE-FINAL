@@ -8,7 +8,7 @@ import Sidebar from "@/components/layout/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Users, Mail, Calendar } from "lucide-react";
+import { Users, Mail, Calendar, BarChart3, FileText, Star } from "lucide-react";
 import type { User } from "@shared/schema";
 
 export default function Team() {
@@ -34,6 +34,11 @@ export default function Team() {
     queryKey: ["/api/team"],
     retry: false,
     enabled: !!user && (user.role === 'supervisor' || user.role === 'manager' || user.role === 'executive'),
+  });
+
+  const { data: stats } = useQuery({
+    queryKey: ["/api/dashboard/stats"],
+    enabled: !!user,
   });
 
   useEffect(() => {
@@ -132,6 +137,45 @@ export default function Team() {
             <p className="text-gray-600">
               Manage your team members and monitor their performance.
             </p>
+          </div>
+
+          {/* Team Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <Card className="shadow-sm border border-gray-100">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Team Members</p>
+                    <p className="text-2xl font-bold text-gray-900">{teamMembers?.length || 0}</p>
+                  </div>
+                  <Users className="h-6 w-6 text-gray-400" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-sm border border-gray-100">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Pending Reviews</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats?.pendingReviews || 0}</p>
+                  </div>
+                  <FileText className="h-6 w-6 text-gray-400" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-sm border border-gray-100">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Avg Rating</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats?.averageRating?.toFixed(1) || "0.0"}</p>
+                  </div>
+                  <Star className="h-6 w-6 text-gray-400" />
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           {teamLoading ? (
