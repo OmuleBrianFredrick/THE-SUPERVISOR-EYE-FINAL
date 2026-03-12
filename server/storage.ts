@@ -65,6 +65,15 @@ export interface IStorage {
     managerCount: number;
     executiveCount: number;
   }>;
+  getAnalytics(): Promise<{
+    reportsByStatus: { status: string; count: number }[];
+    reportsByType: { type: string; count: number }[];
+    usersByRole: { role: string; count: number }[];
+    totalReports: number;
+    approvedReports: number;
+    avgRating: number;
+  }>;
+  updateUserProfile(id: string, updates: { department?: string; firstName?: string; lastName?: string }): Promise<User | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -415,6 +424,59 @@ export class DatabaseStorage implements IStorage {
       managerCount: managerCountResult.count,
       executiveCount: executiveCountResult.count,
     };
+  }
+
+  async getAnalytics(): Promise<{
+    reportsByStatus: { status: string; count: number }[];
+    reportsByType: { type: string; count: number }[];
+    usersByRole: { role: string; count: number }[];
+    totalReports: number;
+    approvedReports: number;
+    avgRating: number;
+  }> {
+    const statusCounts = await db
+      .select({ status: reports.status, count: count() })
+      .from(reports)
+      .groupBy(reports.status);
+
+    const typeCounts = await db
+      .select({ type: reports.type, count: count() })
+      .from(reports)
+      .groupBy(reports.type);
+
+    const roleCounts = await db
+      .select({ role: users.role, count: count() })
+      .from(users)
+      .groupBy(users.role);
+
+    const [totalResult] = await db.select({ count: count() }).from(reports);
+    const [approvedResult] = await db
+      .select({ count: count() })
+      .from(reports)
+      .where(eq(reports.status, 'approved'));
+
+    const [avgResult] = await db
+      .select({ avg: avg(reports.rating) })
+      .from(reports)
+      .where(eq(reports.status, 'approved'));
+
+    return {
+      reportsByStatus: statusCounts.map(r => ({ status: r.status || 'unknown', count: r.count })),
+      reportsByType: typeCounts.map(r => ({ type: r.type, count: r.count })),
+      usersByRole: roleCounts.map(r => ({ role: r.role, count: r.count })),
+      totalReports: totalResult.count,
+      approvedReports: approvedResult.count,
+      avgRating: avgResult.avg ? parseFloat(avgResult.avg) : 0,
+    };
+  }
+
+  async updateUserProfile(id: string, updates: { department?: string; firstName?: string; lastName?: string }): Promise<User | undefined> {
+    const [updated] = await db
+      .update(users)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return updated;
   }
 }
 

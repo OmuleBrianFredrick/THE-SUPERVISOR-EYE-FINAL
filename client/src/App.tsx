@@ -9,6 +9,8 @@ import Dashboard from "@/pages/dashboard";
 import Reports from "@/pages/reports";
 import Team from "@/pages/team";
 import Settings from "@/pages/settings";
+import Analytics from "@/pages/analytics";
+import OrgChart from "@/pages/org-chart";
 import AdminDashboard from "@/pages/admin-dashboard";
 import AdminUsers from "@/pages/admin-users";
 import EmployeeDashboard from "@/pages/employee-dashboard";
@@ -77,6 +79,8 @@ function Router() {
           <Route path="/team" component={Team} />
           <Route path="/dashboard" component={Dashboard} />
           <Route path="/settings" component={Settings} />
+          <Route path="/analytics" component={Analytics} />
+          <Route path="/org-chart" component={OrgChart} />
         </>
       )}
       <Route component={NotFound} />

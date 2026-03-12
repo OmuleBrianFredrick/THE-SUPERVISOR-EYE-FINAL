@@ -22,7 +22,8 @@ import {
   Crown,
   User,
   ChevronRight,
-  Star
+  Star,
+  Network,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -63,34 +64,27 @@ export default function Sidebar() {
   const getNavigationItems = () => {
     const commonItems = [
       { name: "Dashboard", href: getDashboardRoute(), icon: LayoutDashboard, badge: null },
-      { name: "Reports", href: "/reports", icon: FileText, badge: "3" },
+      { name: "Reports", href: "/reports", icon: FileText, badge: null },
       { name: "Team", href: "/team", icon: Users, badge: null, requiresRole: ["supervisor", "manager", "executive"] },
-      { name: "Analytics", href: "/analytics", icon: BarChart3, badge: null, requiresRole: ["manager", "executive"] },
-      { name: "Calendar", href: "/calendar", icon: Calendar, badge: "2" },
-      { name: "Messages", href: "/messages", icon: MessageSquare, badge: "5" },
+      { name: "Analytics", href: "/analytics", icon: BarChart3, badge: null, requiresRole: ["supervisor", "manager", "executive"] },
+      { name: "Org Chart", href: "/org-chart", icon: Network, badge: null, requiresRole: ["supervisor", "manager", "executive"] },
     ];
 
     const roleSpecificItems: { [key: string]: any[] } = {
       employee: [
         { name: "My Goals", href: "/goals", icon: Target, badge: null },
         { name: "Performance", href: "/performance", icon: TrendingUp, badge: null },
-        { name: "Time Tracking", href: "/time", icon: Activity, badge: null },
       ],
       supervisor: [
-        { name: "Team Reports", href: "/team-reports", icon: FileText, badge: "8" },
-        { name: "Performance Reviews", href: "/reviews", icon: Star, badge: "3" },
-        { name: "Team Goals", href: "/team-goals", icon: Target, badge: null },
+        { name: "Performance Reviews", href: "/reviews", icon: Star, badge: null },
       ],
       manager: [
         { name: "Department Overview", href: "/department", icon: PieChart, badge: null },
         { name: "Resource Planning", href: "/resources", icon: Briefcase, badge: null },
-        { name: "Budget Analytics", href: "/budget", icon: BarChart3, badge: null },
       ],
       executive: [
         { name: "Admin Dashboard", href: "/admin-dashboard", icon: Shield, badge: null },
         { name: "User Management", href: "/admin-users", icon: Users, badge: null },
-        { name: "System Analytics", href: "/system-analytics", icon: BarChart3, badge: null },
-        { name: "Organization Health", href: "/org-health", icon: Activity, badge: null },
       ]
     };
 

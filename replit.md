@@ -166,6 +166,41 @@ THE SUPERVISOR is a hierarchical performance reporting and feedback platform des
 - Historical analytics and reporting trends
 - Export/import functionality
 
+## March 12, 2026 - Phase 3: Analytics, Org Chart & Enhanced Settings
+
+### ✓ Analytics Page (`/analytics`)
+- Live bar chart: Reports submitted by type (weekly/project/goal_review/special)
+- Live pie chart: Report status distribution (pending/approved/needs_revision/rejected)
+- Live bar chart: Workforce distribution by role
+- Summary cards: Total reports, approved count, approval rate, average rating
+- Accessible to supervisors, managers, and executives
+
+### ✓ Organization Chart Page (`/org-chart`)
+- Full hierarchical view: Executive → Manager → Supervisor → Employee
+- Visual user cards with avatars, names, emails, departments
+- Role count summary (how many at each level)
+- Arrow connectors showing hierarchy flow
+- Accessible to supervisors, managers, and executives
+
+### ✓ Functional Settings Page (`/settings`)
+- Real user data pulled from authentication
+- Editable first name, last name, and department via API call
+- Department selector with 10 preset departments
+- Role info display (read-only)
+- Authentication status badge
+- Working sign out button
+- Notification preferences display
+
+### ✓ New Backend APIs
+- `GET /api/analytics` - aggregate report and user stats (supervisor+ access)
+- `GET /api/users/all` - all organization users (supervisor+ access)
+- `PATCH /api/users/profile` - update own profile (all users)
+
+### ✓ Navigation & Routing Updates
+- Sidebar now links to Analytics, Org Chart for supervisor/manager/executive
+- App.tsx registered `/analytics` and `/org-chart` routes
+- Removed broken stub nav items (Calendar, Messages badges)
+
 ## Current Feature Map
 
 | Feature | Status | Location |
@@ -181,9 +216,11 @@ THE SUPERVISOR is a hierarchical performance reporting and feedback platform des
 | Manager Dashboard | ✅ Real Data | `/manager-dashboard` |
 | Executive Dashboard | ✅ Real Data | `/executive-dashboard` |
 | Team Management | ✅ Real Data | `/team` |
+| Analytics Charts | ✅ Complete | `/analytics` |
+| Organization Chart | ✅ Complete | `/org-chart` |
 | Notifications | ✅ Complete | Navbar + database backed |
 | Theme System | ✅ Complete | 5 themes available |
-| Settings Page | ✅ Complete | `/settings` |
+| Settings Page | ✅ Functional | `/settings` (editable profile) |
 
 ## User Preferences
 
