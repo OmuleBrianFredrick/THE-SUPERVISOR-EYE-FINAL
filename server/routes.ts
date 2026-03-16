@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { insertReportSchema, insertNotificationSchema } from "@shared/schema";
+import { insertReportSchema, insertNotificationSchema, insertGoalSchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -341,6 +341,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating profile:", error);
       res.status(500).json({ message: "Failed to update profile" });
+    }
+  });
+
+  // Goals routes
+  app.get('/api/goals', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userGoals = await storage.getGoals(userId);
+      res.json(userGoals);
+    } catch (error) {
+      console.error("Error fetching goals:", error);
+      res.status(500).json({ message: "Failed to fetch goals" });
+    }
+  });
+
+  app.post('/api/goals', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const goalData = insertGoalSchema.parse({ ...req.body, userId });
+      const goal = await storage.createGoal(goalData);
+      res.json(goal);
+    } catch (error) {
+      console.error("Error creating goal:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid goal data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create goal" });
+    }
+  });
+
+  app.patch('/api/goals/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const goalId = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
+      const userGoals = await storage.getGoals(userId);
+      const owns = userGoals.some(g => g.id === goalId);
+      if (!owns) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      const updated = await storage.updateGoal(goalId, req.body);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating goal:", error);
+      res.status(500).json({ message: "Failed to update goal" });
+    }
+  });
+
+  app.delete('/api/goals/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const goalId = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
+      const userGoals = await storage.getGoals(userId);
+      const owns = userGoals.some(g => g.id === goalId);
+      if (!owns) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      await storage.deleteGoal(goalId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting goal:", error);
+      res.status(500).json({ message: "Failed to delete goal" });
     }
   });
 

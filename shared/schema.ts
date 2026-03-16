@@ -73,6 +73,17 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const goals = pgTable("goals", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  title: varchar("title").notNull(),
+  description: text("description"),
+  status: varchar("status").default("not_started"), // not_started, in_progress, completed
+  targetDate: timestamp("target_date"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const performanceMetrics = pgTable("performance_metrics", {
   id: serial("id").primaryKey(),
   employeeId: varchar("employee_id").notNull(),
@@ -86,6 +97,13 @@ export const performanceMetrics = pgTable("performance_metrics", {
 });
 
 // Relations
+export const goalRelations = relations(goals, ({ one }) => ({
+  user: one(users, {
+    fields: [goals.userId],
+    references: [users.id],
+  }),
+}));
+
 export const userRelations = relations(users, ({ one, many }) => ({
   supervisor: one(users, {
     fields: [users.supervisorId],
@@ -161,6 +179,12 @@ export const insertPerformanceMetricsSchema = createInsertSchema(performanceMetr
   updatedAt: true,
 });
 
+export const insertGoalSchema = createInsertSchema(goals).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type UpsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -170,6 +194,8 @@ export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type Notification = typeof notifications.$inferSelect;
 export type InsertPerformanceMetrics = z.infer<typeof insertPerformanceMetricsSchema>;
 export type PerformanceMetrics = typeof performanceMetrics.$inferSelect;
+export type InsertGoal = z.infer<typeof insertGoalSchema>;
+export type Goal = typeof goals.$inferSelect;
 
 // Extended types with relations
 export type UserWithRelations = User & {

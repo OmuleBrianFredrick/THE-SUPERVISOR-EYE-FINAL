@@ -3,12 +3,15 @@ import {
   reports,
   notifications,
   performanceMetrics,
+  goals,
   type User,
   type UpsertUser,
   type InsertReport,
   type Report,
   type InsertNotification,
   type Notification,
+  type InsertGoal,
+  type Goal,
   type UserWithRelations,
   type ReportWithRelations,
 } from "@shared/schema";
@@ -74,6 +77,12 @@ export interface IStorage {
     avgRating: number;
   }>;
   updateUserProfile(id: string, updates: { department?: string; firstName?: string; lastName?: string }): Promise<User | undefined>;
+
+  // Goals operations
+  getGoals(userId: string): Promise<Goal[]>;
+  createGoal(goal: InsertGoal): Promise<Goal>;
+  updateGoal(id: number, updates: Partial<InsertGoal>): Promise<Goal | undefined>;
+  deleteGoal(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -477,6 +486,33 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, id))
       .returning();
     return updated;
+  }
+
+  // Goals operations
+  async getGoals(userId: string): Promise<Goal[]> {
+    return await db
+      .select()
+      .from(goals)
+      .where(eq(goals.userId, userId))
+      .orderBy(desc(goals.createdAt));
+  }
+
+  async createGoal(goal: InsertGoal): Promise<Goal> {
+    const [newGoal] = await db.insert(goals).values(goal).returning();
+    return newGoal;
+  }
+
+  async updateGoal(id: number, updates: Partial<InsertGoal>): Promise<Goal | undefined> {
+    const [updated] = await db
+      .update(goals)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(goals.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteGoal(id: number): Promise<void> {
+    await db.delete(goals).where(eq(goals.id, id));
   }
 }
 
