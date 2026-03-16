@@ -22,13 +22,13 @@ export default function Landing() {
   const [showRegistration, setShowRegistration] = useState(false);
 
   const handleLogin = () => {
-    window.location.href = "/api/login";
+    window.location.href = "/login";
   };
 
   const handleRoleBasedLogin = (role: string) => {
     // Store intended role in session storage for post-login routing
     sessionStorage.setItem('intended_role', role);
-    window.location.href = "/api/login";
+    window.location.href = "/login";
   };
 
   const roleCards = [

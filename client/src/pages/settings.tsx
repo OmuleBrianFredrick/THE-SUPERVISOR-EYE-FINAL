@@ -236,7 +236,10 @@ export default function Settings() {
                       variant="outline"
                       size="sm"
                       className="text-red-600 border-red-200 hover:bg-red-50"
-                      onClick={() => { window.location.href = "/api/logout"; }}
+                      onClick={async () => {
+                        try { await fetch("/api/auth/logout", { method: "POST" }); } catch {}
+                        window.location.href = "/login";
+                      }}
                     >
                       <LogOut className="w-4 h-4 mr-2" />
                       Sign Out

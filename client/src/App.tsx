@@ -1,10 +1,13 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
+import { useEffect } from "react";
 import Landing from "@/pages/landing";
+import Login from "@/pages/login";
+import Register from "@/pages/register";
 import Dashboard from "@/pages/dashboard";
 import Reports from "@/pages/reports";
 import Team from "@/pages/team";
@@ -19,62 +22,62 @@ import ManagerDashboard from "@/pages/manager-dashboard";
 import ExecutiveDashboard from "@/pages/executive-dashboard";
 import NotFound from "@/pages/not-found";
 
-function Router() {
-  const { isAuthenticated, isLoading, user } = useAuth();
+function RoleRedirect() {
+  const { user } = useAuth();
+  const [, navigate] = useLocation();
 
-  // Post-login routing based on intended role
-  const getInitialRoute = () => {
-    const intendedRole = sessionStorage.getItem('intended_role');
-    sessionStorage.removeItem('intended_role'); // Clear after use
-    
-    if (intendedRole) {
-      switch (intendedRole) {
-        case 'employee': return '/employee-dashboard';
-        case 'supervisor': return '/supervisor-dashboard';
-        case 'manager': return '/manager-dashboard';
-        case 'executive': return '/executive-dashboard';
-        default: return '/';
-      }
-    }
-    
-    // Default routing based on user role
+  useEffect(() => {
     if (user) {
-      switch (user.role) {
-        case 'employee': return '/employee-dashboard';
-        case 'supervisor': return '/supervisor-dashboard';
-        case 'manager': return '/manager-dashboard';
-        case 'executive': return '/executive-dashboard';
-        default: return '/';
-      }
+      const routes: Record<string, string> = {
+        employee: "/employee-dashboard",
+        supervisor: "/supervisor-dashboard",
+        manager: "/manager-dashboard",
+        executive: "/executive-dashboard",
+      };
+      navigate(routes[user.role] || "/dashboard");
     }
-    
-    return '/';
-  };
+  }, [user, navigate]);
+
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600" />
+    </div>
+  );
+}
+
+function Router() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-900">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500" />
+      </div>
+    );
+  }
 
   return (
     <Switch>
-      {isLoading || !isAuthenticated ? (
-        <Route path="/" component={Landing} />
-      ) : (
+      {/* Auth pages — always accessible */}
+      <Route path="/login" component={Login} />
+      <Route path="/register" component={Register} />
+
+      {/* Public landing */}
+      <Route path="/landing" component={Landing} />
+
+      {isAuthenticated ? (
         <>
-          <Route path="/" component={() => {
-            const route = getInitialRoute();
-            if (route !== '/') {
-              window.location.href = route;
-              return <div>Redirecting...</div>;
-            }
-            return <Dashboard />;
-          }} />
-          
-          {/* Role-specific Dashboards */}
-          <Route path="/admin-dashboard" component={AdminDashboard} />
-          <Route path="/admin-users" component={AdminUsers} />
+          <Route path="/" component={RoleRedirect} />
+
+          {/* Role dashboards */}
           <Route path="/employee-dashboard" component={EmployeeDashboard} />
           <Route path="/supervisor-dashboard" component={SupervisorDashboard} />
           <Route path="/manager-dashboard" component={ManagerDashboard} />
           <Route path="/executive-dashboard" component={ExecutiveDashboard} />
-          
-          {/* Common Pages */}
+          <Route path="/admin-dashboard" component={AdminDashboard} />
+          <Route path="/admin-users" component={AdminUsers} />
+
+          {/* Common pages */}
           <Route path="/reports" component={Reports} />
           <Route path="/team" component={Team} />
           <Route path="/dashboard" component={Dashboard} />
@@ -82,7 +85,11 @@ function Router() {
           <Route path="/analytics" component={Analytics} />
           <Route path="/org-chart" component={OrgChart} />
         </>
+      ) : (
+        // Redirect unauthenticated users to login for any protected path
+        <Route path="/" component={Login} />
       )}
+
       <Route component={NotFound} />
     </Switch>
   );

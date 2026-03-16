@@ -62,8 +62,11 @@ THE SUPERVISOR is a hierarchical performance reporting and feedback platform des
 ## External Dependencies
 
 ### Authentication
-- **Replit Auth**: OIDC provider for user authentication
-- **Requirements**: REPLIT_DOMAINS and SESSION_SECRET environment variables
+- **Custom Auth**: Email + password authentication, fully independent of Replit accounts
+- **Password Security**: bcryptjs hashing with 12 salt rounds
+- **Sessions**: Express sessions backed by PostgreSQL (connect-pg-simple)
+- **Registration**: 2-step form — personal details + organization role/department/supervisor
+- **Login/Register pages**: `/login` and `/register` — accessible without a Replit account
 
 ### Database
 - **Neon PostgreSQL**: Serverless PostgreSQL database

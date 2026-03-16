@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated } from "./auth";
 import { insertReportSchema, insertNotificationSchema, insertGoalSchema } from "@shared/schema";
 import { z } from "zod";
 
@@ -12,9 +12,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = (req.session as any).userId;
       const user = await storage.getUserWithRelations(userId);
-      res.json(user);
+      if (!user) return res.status(404).json({ message: "User not found" });
+      const { password, ...safeUser } = user as any;
+      res.json(safeUser);
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
@@ -24,7 +26,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Dashboard stats
   app.get('/api/dashboard/stats', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = (req.session as any).userId;
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
@@ -41,7 +43,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Reports routes
   app.post('/api/reports', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = (req.session as any).userId;
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
@@ -78,7 +80,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/reports', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = (req.session as any).userId;
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
@@ -111,7 +113,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/reports/:id', isAuthenticated, async (req: any, res) => {
     try {
       const reportId = parseInt(req.params.id);
-      const userId = req.user.claims.sub;
+      const userId = (req.session as any).userId;
       const user = await storage.getUser(userId);
       
       if (!user) {
@@ -143,7 +145,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch('/api/reports/:id/review', isAuthenticated, async (req: any, res) => {
     try {
       const reportId = parseInt(req.params.id);
-      const userId = req.user.claims.sub;
+      const userId = (req.session as any).userId;
       const { feedback, rating, status } = req.body;
 
       const user = await storage.getUser(userId);
@@ -189,7 +191,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Notifications routes
   app.get('/api/notifications', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = (req.session as any).userId;
       const { limit = 10 } = req.query;
 
       const notifications = await storage.getUserNotifications(userId, parseInt(limit));
@@ -202,7 +204,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/notifications/unread-count', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = (req.session as any).userId;
       const count = await storage.getUnreadNotificationCount(userId);
       res.json({ count });
     } catch (error) {
@@ -225,7 +227,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Team routes
   app.get('/api/team', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = (req.session as any).userId;
       const subordinates = await storage.getSubordinates(userId);
       res.json(subordinates);
     } catch (error) {
@@ -237,7 +239,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch('/api/users/:id/role', isAuthenticated, async (req: any, res) => {
     try {
       const targetUserId = req.params.id;
-      const userId = req.user.claims.sub;
+      const userId = (req.session as any).userId;
       const { role, supervisorId } = req.body;
 
       const user = await storage.getUser(userId);
@@ -256,7 +258,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin routes
   app.get('/api/admin/users', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = (req.session as any).userId;
       const user = await storage.getUser(userId);
       
       if (!user || user.role !== 'executive') {
@@ -273,7 +275,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/admin/stats', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = (req.session as any).userId;
       const user = await storage.getUser(userId);
       
       if (!user || user.role !== 'executive') {
@@ -302,7 +304,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Analytics route (manager + executive)
   app.get('/api/analytics', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = (req.session as any).userId;
       const user = await storage.getUser(userId);
       if (!user || (user.role !== 'manager' && user.role !== 'executive' && user.role !== 'supervisor')) {
         return res.status(403).json({ message: "Insufficient permissions" });
@@ -318,7 +320,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // All users route (for org chart - manager+executive)
   app.get('/api/users/all', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = (req.session as any).userId;
       const user = await storage.getUser(userId);
       if (!user || (user.role !== 'manager' && user.role !== 'executive' && user.role !== 'supervisor')) {
         return res.status(403).json({ message: "Insufficient permissions" });
@@ -334,7 +336,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // User profile update
   app.patch('/api/users/profile', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = (req.session as any).userId;
       const { department, firstName, lastName } = req.body;
       const updated = await storage.updateUserProfile(userId, { department, firstName, lastName });
       res.json(updated);
@@ -347,7 +349,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Goals routes
   app.get('/api/goals', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = (req.session as any).userId;
       const userGoals = await storage.getGoals(userId);
       res.json(userGoals);
     } catch (error) {
@@ -358,7 +360,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/goals', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = (req.session as any).userId;
       const goalData = insertGoalSchema.parse({ ...req.body, userId });
       const goal = await storage.createGoal(goalData);
       res.json(goal);
@@ -374,7 +376,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch('/api/goals/:id', isAuthenticated, async (req: any, res) => {
     try {
       const goalId = parseInt(req.params.id);
-      const userId = req.user.claims.sub;
+      const userId = (req.session as any).userId;
       const userGoals = await storage.getGoals(userId);
       const owns = userGoals.some(g => g.id === goalId);
       if (!owns) {
@@ -391,7 +393,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/goals/:id', isAuthenticated, async (req: any, res) => {
     try {
       const goalId = parseInt(req.params.id);
-      const userId = req.user.claims.sub;
+      const userId = (req.session as any).userId;
       const userGoals = await storage.getGoals(userId);
       const owns = userGoals.some(g => g.id === goalId);
       if (!owns) {

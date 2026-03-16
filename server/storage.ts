@@ -24,6 +24,7 @@ export interface IStorage {
   upsertUser(user: UpsertUser): Promise<User>;
   
   // Additional user operations
+  getUserByEmail(email: string): Promise<User | undefined>;
   getUserWithRelations(id: string): Promise<UserWithRelations | undefined>;
   getSubordinates(supervisorId: string): Promise<User[]>;
   updateUserRole(id: string, role: string, supervisorId?: string): Promise<User | undefined>;
@@ -104,6 +105,11 @@ export class DatabaseStorage implements IStorage {
         },
       })
       .returning();
+    return user;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
     return user;
   }
 
