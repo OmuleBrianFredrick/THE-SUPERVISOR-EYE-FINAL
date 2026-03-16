@@ -2,25 +2,28 @@ import { useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import Navbar from "@/components/layout/navbar";
 import Sidebar from "@/components/layout/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Building, 
-  Users, 
-  BarChart3, 
+import {
+  Building,
+  Users,
+  BarChart3,
   TrendingUp,
   FileText,
-  Shield,
-  Award,
-  Settings
+  Star,
+  CheckCircle,
+  Network,
 } from "lucide-react";
+import type { User } from "@shared/schema";
 
 export default function ManagerDashboard() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading, user } = useAuth();
+  const [, navigate] = useLocation();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -40,6 +43,23 @@ export default function ManagerDashboard() {
     queryKey: ["/api/dashboard/stats"],
   });
 
+  const { data: analytics } = useQuery<{
+    reportsByStatus: { status: string; count: number }[];
+    reportsByType: { type: string; count: number }[];
+    usersByRole: { role: string; count: number }[];
+    totalReports: number;
+    approvedReports: number;
+    avgRating: number;
+  }>({
+    queryKey: ["/api/analytics"],
+    enabled: !!user,
+  });
+
+  const { data: allUsers } = useQuery<User[]>({
+    queryKey: ["/api/users/all"],
+    enabled: !!user,
+  });
+
   if (isLoading || !isAuthenticated || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -48,13 +68,46 @@ export default function ManagerDashboard() {
     );
   }
 
+  // Compute real department stats from user list
+  const departmentMap: Record<string, { employees: number; supervisors: number; managers: number }> = {};
+  (allUsers || []).forEach(u => {
+    if (!u.department) return;
+    if (!departmentMap[u.department]) departmentMap[u.department] = { employees: 0, supervisors: 0, managers: 0 };
+    if (u.role === "employee") departmentMap[u.department].employees++;
+    if (u.role === "supervisor") departmentMap[u.department].supervisors++;
+    if (u.role === "manager") departmentMap[u.department].managers++;
+  });
+  const departments = Object.entries(departmentMap).map(([name, counts]) => ({ name, ...counts }));
+  const departmentCount = departments.length || Object.keys(departmentMap).length;
+
+  // Real computed metrics
+  const approvalRate = analytics && analytics.totalReports > 0
+    ? Math.round((analytics.approvedReports / analytics.totalReports) * 100)
+    : 0;
+
+  const avgRatingPct = analytics && analytics.avgRating > 0
+    ? Math.round((analytics.avgRating / 5) * 100)
+    : 0;
+
+  const completionRate = stats && (stats.completedReports + stats.pendingReviews) > 0
+    ? Math.round((stats.completedReports / (stats.completedReports + stats.pendingReviews)) * 100)
+    : 0;
+
+  const DEPT_COLORS = [
+    { bg: "bg-blue-50", border: "border-blue-100", badge: "text-blue-600" },
+    { bg: "bg-green-50", border: "border-green-100", badge: "text-green-600" },
+    { bg: "bg-purple-50", border: "border-purple-100", badge: "text-purple-600" },
+    { bg: "bg-orange-50", border: "border-orange-100", badge: "text-orange-600" },
+    { bg: "bg-pink-50", border: "border-pink-100", badge: "text-pink-600" },
+  ];
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
-      
+
       <div className="flex">
         <Sidebar />
-        
+
         <main className="flex-1 p-6">
           <div className="mb-8">
             <div className="flex items-center space-x-3 mb-4">
@@ -67,14 +120,15 @@ export default function ManagerDashboard() {
             </p>
           </div>
 
-          {/* Manager Stats */}
+          {/* Manager Stats — all real */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <Card className="shadow-sm border border-gray-100">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-600">Departments</p>
-                    <p className="text-3xl font-bold text-gray-900">3</p>
+                    <p className="text-3xl font-bold text-gray-900">{departmentCount || (allUsers ? "—" : "…")}</p>
+                    <p className="text-xs text-gray-400 mt-1">with assigned members</p>
                   </div>
                   <div className="w-12 h-12 bg-manager bg-opacity-10 rounded-lg flex items-center justify-center">
                     <Building className="text-manager h-6 w-6" />
@@ -88,7 +142,8 @@ export default function ManagerDashboard() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-600">Total Reports</p>
-                    <p className="text-3xl font-bold text-gray-900">{stats?.completedReports || 0}</p>
+                    <p className="text-3xl font-bold text-gray-900">{analytics?.totalReports ?? 0}</p>
+                    <p className="text-xs text-gray-400 mt-1">{analytics?.approvedReports ?? 0} approved</p>
                   </div>
                   <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                     <FileText className="text-blue-600 h-6 w-6" />
@@ -102,7 +157,8 @@ export default function ManagerDashboard() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-600">Team Members</p>
-                    <p className="text-3xl font-bold text-gray-900">{stats?.teamMembers || 0}</p>
+                    <p className="text-3xl font-bold text-gray-900">{stats?.teamMembers ?? 0}</p>
+                    <p className="text-xs text-gray-400 mt-1">direct reports</p>
                   </div>
                   <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                     <Users className="text-green-600 h-6 w-6" />
@@ -115,8 +171,11 @@ export default function ManagerDashboard() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Efficiency</p>
-                    <p className="text-3xl font-bold text-green-600">94%</p>
+                    <p className="text-sm font-medium text-gray-600">Approval Rate</p>
+                    <p className={`text-3xl font-bold ${approvalRate >= 75 ? "text-green-600" : approvalRate >= 50 ? "text-orange-500" : "text-red-500"}`}>
+                      {analytics ? `${approvalRate}%` : "—"}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">reports approved</p>
                   </div>
                   <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                     <TrendingUp className="text-green-600 h-6 w-6" />
@@ -127,84 +186,93 @@ export default function ManagerDashboard() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            {/* Department Overview */}
+            {/* Department Overview — real data */}
             <Card className="shadow-sm border border-gray-100">
               <CardHeader>
                 <CardTitle className="text-lg">Department Overview</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
-                    <div>
-                      <p className="font-medium text-gray-900">Engineering</p>
-                      <p className="text-sm text-gray-600">12 employees, 5 supervisors</p>
-                    </div>
-                    <Badge variant="outline" className="text-blue-600">Excellent</Badge>
+                {departments.length > 0 ? (
+                  <div className="space-y-3">
+                    {departments.slice(0, 5).map((dept, i) => {
+                      const c = DEPT_COLORS[i % DEPT_COLORS.length];
+                      const total = dept.employees + dept.supervisors + dept.managers;
+                      return (
+                        <div key={dept.name} className={`flex items-center justify-between p-4 ${c.bg} rounded-lg border ${c.border}`}>
+                          <div>
+                            <p className="font-medium text-gray-900 capitalize">{dept.name.replace("-", " ")}</p>
+                            <p className="text-sm text-gray-600">
+                              {dept.employees} {dept.employees === 1 ? "employee" : "employees"}
+                              {dept.supervisors > 0 && `, ${dept.supervisors} supervisor${dept.supervisors > 1 ? "s" : ""}`}
+                            </p>
+                          </div>
+                          <Badge variant="outline" className={c.badge}>{total} total</Badge>
+                        </div>
+                      );
+                    })}
+                    {departments.length === 0 && (
+                      <p className="text-gray-500 text-center py-4">No departments assigned yet</p>
+                    )}
                   </div>
-                  
-                  <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
-                    <div>
-                      <p className="font-medium text-gray-900">Sales</p>
-                      <p className="text-sm text-gray-600">8 employees, 3 supervisors</p>
-                    </div>
-                    <Badge variant="outline" className="text-green-600">Good</Badge>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Building className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+                    <p>No department data available yet.</p>
+                    <p className="text-sm text-gray-400 mt-1">Assign departments to users in User Management.</p>
                   </div>
-                  
-                  <div className="flex items-center justify-between p-4 bg-orange-50 rounded-lg">
-                    <div>
-                      <p className="font-medium text-gray-900">Marketing</p>
-                      <p className="text-sm text-gray-600">6 employees, 2 supervisors</p>
-                    </div>
-                    <Badge variant="outline" className="text-orange-600">Improving</Badge>
-                  </div>
-                </div>
+                )}
               </CardContent>
             </Card>
 
-            {/* Strategic Metrics */}
+            {/* Strategic Metrics — computed from real data */}
             <Card className="shadow-sm border border-gray-100">
               <CardHeader>
-                <CardTitle className="text-lg">Strategic Metrics</CardTitle>
+                <CardTitle className="text-lg">Performance Metrics</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-6">
                   <div>
                     <div className="flex justify-between text-sm mb-2">
-                      <span className="text-gray-600">Goal Achievement</span>
-                      <span className="font-medium">87%</span>
+                      <span className="text-gray-600">Report Approval Rate</span>
+                      <span className="font-medium">{analytics ? `${approvalRate}%` : "—"}</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div className="bg-green-600 h-2 rounded-full" style={{ width: '87%' }}></div>
+                      <div className="bg-green-600 h-2 rounded-full transition-all" style={{ width: `${approvalRate}%` }}></div>
                     </div>
                   </div>
-                  
+
                   <div>
                     <div className="flex justify-between text-sm mb-2">
-                      <span className="text-gray-600">Team Satisfaction</span>
-                      <span className="font-medium">92%</span>
+                      <span className="text-gray-600">Average Team Rating</span>
+                      <span className="font-medium">
+                        {analytics?.avgRating ? `${analytics.avgRating.toFixed(1)} / 5.0` : "—"}
+                      </span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div className="bg-blue-600 h-2 rounded-full" style={{ width: '92%' }}></div>
+                      <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: `${avgRatingPct}%` }}></div>
                     </div>
                   </div>
-                  
+
                   <div>
                     <div className="flex justify-between text-sm mb-2">
-                      <span className="text-gray-600">Project Delivery</span>
-                      <span className="font-medium">78%</span>
+                      <span className="text-gray-600">Review Completion</span>
+                      <span className="font-medium">{stats ? `${completionRate}%` : "—"}</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div className="bg-orange-600 h-2 rounded-full" style={{ width: '78%' }}></div>
+                      <div className="bg-purple-600 h-2 rounded-full transition-all" style={{ width: `${completionRate}%` }}></div>
                     </div>
                   </div>
-                  
+
                   <div>
                     <div className="flex justify-between text-sm mb-2">
-                      <span className="text-gray-600">Budget Efficiency</span>
-                      <span className="font-medium">94%</span>
+                      <span className="text-gray-600">Pending Reviews</span>
+                      <span className="font-medium">{stats?.pendingReviews ?? "—"}</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div className="bg-green-600 h-2 rounded-full" style={{ width: '94%' }}></div>
+                      <div
+                        className="bg-orange-500 h-2 rounded-full transition-all"
+                        style={{ width: stats?.pendingReviews ? `${Math.min((stats.pendingReviews / Math.max(analytics?.totalReports || 1, 1)) * 100, 100)}%` : "0%" }}
+                      ></div>
                     </div>
                   </div>
                 </div>
@@ -212,43 +280,46 @@ export default function ManagerDashboard() {
             </Card>
           </div>
 
-          {/* Manager Actions */}
+          {/* Manager Actions — all wired to real pages */}
           <Card className="shadow-sm border border-gray-100">
             <CardHeader>
               <CardTitle className="text-lg">Manager Actions</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Button 
+                <Button
                   className="flex flex-col items-center space-y-2 p-6 h-auto bg-manager hover:bg-orange-600"
-                  onClick={() => window.location.href = "/team"}
+                  onClick={() => navigate("/team")}
                 >
                   <Users className="h-8 w-8" />
-                  <span>Department Overview</span>
+                  <span>Team Overview</span>
                 </Button>
-                
-                <Button 
+
+                <Button
                   variant="outline"
                   className="flex flex-col items-center space-y-2 p-6 h-auto"
+                  onClick={() => navigate("/analytics")}
                 >
                   <BarChart3 className="h-8 w-8" />
                   <span>Analytics</span>
                 </Button>
-                
-                <Button 
+
+                <Button
                   variant="outline"
                   className="flex flex-col items-center space-y-2 p-6 h-auto"
+                  onClick={() => navigate("/org-chart")}
                 >
-                  <Shield className="h-8 w-8" />
-                  <span>Resource Allocation</span>
+                  <Network className="h-8 w-8" />
+                  <span>Org Chart</span>
                 </Button>
-                
-                <Button 
+
+                <Button
                   variant="outline"
                   className="flex flex-col items-center space-y-2 p-6 h-auto"
+                  onClick={() => navigate("/reports")}
                 >
-                  <Settings className="h-8 w-8" />
-                  <span>Strategic Planning</span>
+                  <CheckCircle className="h-8 w-8" />
+                  <span>Review Reports</span>
                 </Button>
               </div>
             </CardContent>

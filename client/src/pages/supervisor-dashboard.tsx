@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import Navbar from "@/components/layout/navbar";
 import Sidebar from "@/components/layout/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +23,7 @@ import {
 export default function SupervisorDashboard() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading, user } = useAuth();
+  const [, navigate] = useLocation();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -271,7 +273,7 @@ export default function SupervisorDashboard() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Button 
                   className="flex flex-col items-center space-y-2 p-6 h-auto bg-orange-600 hover:bg-orange-700"
-                  onClick={() => window.location.href = "/reports"}
+                  onClick={() => navigate("/reports")}
                 >
                   <Clock className="h-8 w-8" />
                   <span>Review Reports</span>
@@ -280,7 +282,7 @@ export default function SupervisorDashboard() {
                 <Button 
                   variant="outline"
                   className="flex flex-col items-center space-y-2 p-6 h-auto"
-                  onClick={() => window.location.href = "/team"}
+                  onClick={() => navigate("/team")}
                 >
                   <Users className="h-8 w-8" />
                   <span>Manage Team</span>
@@ -289,6 +291,7 @@ export default function SupervisorDashboard() {
                 <Button 
                   variant="outline"
                   className="flex flex-col items-center space-y-2 p-6 h-auto"
+                  onClick={() => navigate("/analytics")}
                 >
                   <TrendingUp className="h-8 w-8" />
                   <span>Team Analytics</span>
@@ -297,9 +300,10 @@ export default function SupervisorDashboard() {
                 <Button 
                   variant="outline"
                   className="flex flex-col items-center space-y-2 p-6 h-auto"
+                  onClick={() => navigate("/org-chart")}
                 >
                   <Award className="h-8 w-8" />
-                  <span>Recognition</span>
+                  <span>Org Chart</span>
                 </Button>
               </div>
             </CardContent>

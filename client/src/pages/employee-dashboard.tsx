@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import Navbar from "@/components/layout/navbar";
 import Sidebar from "@/components/layout/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +23,7 @@ import {
 export default function EmployeeDashboard() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading, user } = useAuth();
+  const [, navigate] = useLocation();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -228,35 +230,37 @@ export default function EmployeeDashboard() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Button 
                   className="flex flex-col items-center space-y-2 p-6 h-auto"
-                  onClick={() => window.location.href = "/reports"}
+                  onClick={() => navigate("/reports")}
                 >
                   <FileText className="h-8 w-8" />
-                  <span>Create Report</span>
+                  <span>Submit Report</span>
                 </Button>
                 
                 <Button 
                   variant="outline"
                   className="flex flex-col items-center space-y-2 p-6 h-auto"
-                  onClick={() => window.location.href = "/reports"}
+                  onClick={() => navigate("/reports")}
                 >
                   <Clock className="h-8 w-8" />
-                  <span>View Reports</span>
+                  <span>View My Reports</span>
                 </Button>
                 
                 <Button 
                   variant="outline"
                   className="flex flex-col items-center space-y-2 p-6 h-auto"
+                  onClick={() => navigate("/reports")}
                 >
                   <TrendingUp className="h-8 w-8" />
-                  <span>Performance</span>
+                  <span>My Performance</span>
                 </Button>
                 
                 <Button 
                   variant="outline"
                   className="flex flex-col items-center space-y-2 p-6 h-auto"
+                  onClick={() => navigate("/settings")}
                 >
                   <Award className="h-8 w-8" />
-                  <span>Goals</span>
+                  <span>My Profile</span>
                 </Button>
               </div>
             </CardContent>
