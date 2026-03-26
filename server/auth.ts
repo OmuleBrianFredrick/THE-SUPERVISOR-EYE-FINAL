@@ -3,6 +3,7 @@ import session from "express-session";
 import connectPg from "connect-pg-simple";
 import type { Express, RequestHandler } from "express";
 import { storage } from "./storage";
+import { OAuth2Client } from "google-auth-library";
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000;
@@ -174,6 +175,95 @@ export async function setupAuth(app: Express) {
     } catch (error) {
       console.error("Reset password error:", error);
       res.status(500).json({ message: "Failed to reset password. Please try again." });
+    }
+  });
+
+  // Google OAuth — Step 1: redirect to Google
+  app.get("/api/auth/google", (req, res) => {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+      return res.redirect("/login?error=google_not_configured");
+    }
+
+    const protocol = req.headers["x-forwarded-proto"] || req.protocol || "https";
+    const host = req.headers.host;
+    const redirectUri = `${protocol}://${host}/api/auth/google/callback`;
+
+    const client = new OAuth2Client(clientId, clientSecret, redirectUri);
+    const authUrl = client.generateAuthUrl({
+      access_type: "offline",
+      scope: ["openid", "email", "profile"],
+      prompt: "select_account",
+    });
+
+    res.redirect(authUrl);
+  });
+
+  // Google OAuth — Step 2: callback from Google
+  app.get("/api/auth/google/callback", async (req, res) => {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+      return res.redirect("/login?error=google_not_configured");
+    }
+
+    const { code, error } = req.query as { code?: string; error?: string };
+
+    if (error || !code) {
+      return res.redirect("/login?error=google_cancelled");
+    }
+
+    try {
+      const protocol = req.headers["x-forwarded-proto"] || req.protocol || "https";
+      const host = req.headers.host;
+      const redirectUri = `${protocol}://${host}/api/auth/google/callback`;
+
+      const client = new OAuth2Client(clientId, clientSecret, redirectUri);
+      const { tokens } = await client.getToken(code);
+      client.setCredentials(tokens);
+
+      const ticket = await client.verifyIdToken({
+        idToken: tokens.id_token!,
+        audience: clientId,
+      });
+
+      const payload = ticket.getPayload();
+      if (!payload || !payload.email) {
+        return res.redirect("/login?error=google_no_email");
+      }
+
+      // Find or create the user
+      let user = await storage.getUserByEmail(payload.email);
+
+      if (!user) {
+        const userId = crypto.randomUUID();
+        user = await storage.upsertUser({
+          id: userId,
+          email: payload.email,
+          firstName: payload.given_name || null,
+          lastName: payload.family_name || null,
+          profileImageUrl: payload.picture || null,
+          role: "employee",
+          isActive: true,
+        });
+      }
+
+      (req.session as any).userId = user.id;
+
+      const roleRoutes: Record<string, string> = {
+        employee: "/employee-dashboard",
+        supervisor: "/supervisor-dashboard",
+        manager: "/manager-dashboard",
+        executive: "/executive-dashboard",
+      };
+
+      res.redirect(roleRoutes[user.role] || "/employee-dashboard");
+    } catch (err) {
+      console.error("Google OAuth callback error:", err);
+      res.redirect("/login?error=google_failed");
     }
   });
 
