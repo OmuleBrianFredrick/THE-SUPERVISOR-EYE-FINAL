@@ -20,6 +20,11 @@ import EmployeeDashboard from "@/pages/employee-dashboard";
 import SupervisorDashboard from "@/pages/supervisor-dashboard";
 import ManagerDashboard from "@/pages/manager-dashboard";
 import ExecutiveDashboard from "@/pages/executive-dashboard";
+import Goals from "@/pages/goals";
+import Performance from "@/pages/performance";
+import Reviews from "@/pages/reviews";
+import Department from "@/pages/department";
+import Resources from "@/pages/resources";
 import NotFound from "@/pages/not-found";
 
 function RoleRedirect() {
@@ -77,6 +82,13 @@ function Router() {
           <Route path="/admin-dashboard" component={AdminDashboard} />
           <Route path="/admin-users" component={AdminUsers} />
 
+          {/* Role-specific feature pages */}
+          <Route path="/goals" component={Goals} />
+          <Route path="/performance" component={Performance} />
+          <Route path="/reviews" component={Reviews} />
+          <Route path="/department" component={Department} />
+          <Route path="/resources" component={Resources} />
+
           {/* Common pages */}
           <Route path="/reports" component={Reports} />
           <Route path="/team" component={Team} />
@@ -86,7 +98,6 @@ function Router() {
           <Route path="/org-chart" component={OrgChart} />
         </>
       ) : (
-        // Redirect unauthenticated users to login for any protected path
         <Route path="/" component={Login} />
       )}
 
