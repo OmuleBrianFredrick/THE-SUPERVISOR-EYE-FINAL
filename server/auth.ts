@@ -116,6 +116,67 @@ export async function setupAuth(app: Express) {
     });
   });
 
+  // Forgot password — generates a reset token and returns the reset URL
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      // Always respond 200 so we don't leak which emails exist
+      if (!user) {
+        return res.json({ message: "If that email exists, a reset link has been generated." });
+      }
+
+      const token = crypto.randomUUID() + "-" + Date.now();
+      const expiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+      await storage.setResetToken(user.id, token, expiry);
+
+      const host = req.headers.host || "localhost:5000";
+      const protocol = req.headers["x-forwarded-proto"] || "http";
+      const resetUrl = `${protocol}://${host}/reset-password?token=${token}`;
+
+      res.json({ resetUrl, message: "Reset link generated successfully." });
+    } catch (error) {
+      console.error("Forgot password error:", error);
+      res.status(500).json({ message: "Failed to generate reset link. Please try again." });
+    }
+  });
+
+  // Reset password — validates token and sets a new password
+  app.post("/api/auth/reset-password", async (req, res) => {
+    try {
+      const { token, password } = req.body;
+      if (!token || !password) {
+        return res.status(400).json({ message: "Token and new password are required" });
+      }
+      if (password.length < 6) {
+        return res.status(400).json({ message: "Password must be at least 6 characters" });
+      }
+
+      const user = await storage.getUserByResetToken(token);
+      if (!user || !user.resetToken || !user.resetTokenExpiry) {
+        return res.status(400).json({ message: "Invalid or expired reset link" });
+      }
+
+      if (new Date() > new Date(user.resetTokenExpiry)) {
+        await storage.clearResetToken(user.id);
+        return res.status(400).json({ message: "Reset link has expired. Please request a new one." });
+      }
+
+      const hashed = await bcrypt.hash(password, 12);
+      await storage.updatePassword(user.id, hashed);
+      await storage.clearResetToken(user.id);
+
+      res.json({ message: "Password reset successfully. You can now sign in." });
+    } catch (error) {
+      console.error("Reset password error:", error);
+      res.status(500).json({ message: "Failed to reset password. Please try again." });
+    }
+  });
+
   // Public: list potential supervisors for a given role (used during registration)
   app.get("/api/public/supervisors/:role", async (req, res) => {
     try {

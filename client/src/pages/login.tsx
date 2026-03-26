@@ -104,16 +104,26 @@ export default function Login() {
                 </div>
               </div>
 
+              <div className="flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => navigate("/forgot-password")}
+                  className="text-blue-400 hover:text-white text-xs transition-colors underline-offset-2 hover:underline"
+                >
+                  Forgot password?
+                </button>
+              </div>
+
               <Button
                 type="submit"
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 mt-2"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5"
                 disabled={loginMutation.isPending}
               >
                 {loginMutation.isPending ? "Signing in..." : "Sign In"}
               </Button>
             </form>
 
-            <div className="mt-6 text-center">
+            <div className="mt-6 space-y-3 text-center">
               <p className="text-blue-200 text-sm">
                 Don't have an account?{" "}
                 <button

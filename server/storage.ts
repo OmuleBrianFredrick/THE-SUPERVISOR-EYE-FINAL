@@ -84,6 +84,12 @@ export interface IStorage {
   createGoal(goal: InsertGoal): Promise<Goal>;
   updateGoal(id: number, updates: Partial<InsertGoal>): Promise<Goal | undefined>;
   deleteGoal(id: number): Promise<void>;
+
+  // Password reset operations
+  setResetToken(userId: string, token: string, expiry: Date): Promise<void>;
+  getUserByResetToken(token: string): Promise<User | undefined>;
+  clearResetToken(userId: string): Promise<void>;
+  updatePassword(userId: string, hashedPassword: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -519,6 +525,35 @@ export class DatabaseStorage implements IStorage {
 
   async deleteGoal(id: number): Promise<void> {
     await db.delete(goals).where(eq(goals.id, id));
+  }
+
+  async setResetToken(userId: string, token: string, expiry: Date): Promise<void> {
+    await db
+      .update(users)
+      .set({ resetToken: token, resetTokenExpiry: expiry, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+  }
+
+  async getUserByResetToken(token: string): Promise<User | undefined> {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.resetToken, token));
+    return user;
+  }
+
+  async clearResetToken(userId: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ resetToken: null, resetTokenExpiry: null, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+  }
+
+  async updatePassword(userId: string, hashedPassword: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ password: hashedPassword, updatedAt: new Date() })
+      .where(eq(users.id, userId));
   }
 }
 

@@ -39,6 +39,8 @@ export const users = pgTable("users", {
   supervisorId: varchar("supervisor_id"),
   department: varchar("department"),
   isActive: boolean("is_active").default(true),
+  resetToken: varchar("reset_token"),
+  resetTokenExpiry: timestamp("reset_token_expiry"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

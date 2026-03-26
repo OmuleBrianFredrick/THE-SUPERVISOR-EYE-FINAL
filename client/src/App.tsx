@@ -25,6 +25,8 @@ import Performance from "@/pages/performance";
 import Reviews from "@/pages/reviews";
 import Department from "@/pages/department";
 import Resources from "@/pages/resources";
+import ForgotPassword from "@/pages/forgot-password";
+import ResetPassword from "@/pages/reset-password";
 import NotFound from "@/pages/not-found";
 
 function RoleRedirect() {
@@ -66,6 +68,8 @@ function Router() {
       {/* Auth pages — always accessible */}
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
+      <Route path="/forgot-password" component={ForgotPassword} />
+      <Route path="/reset-password" component={ResetPassword} />
 
       {/* Public landing */}
       <Route path="/landing" component={Landing} />
