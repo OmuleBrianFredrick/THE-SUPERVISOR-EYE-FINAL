@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -11,8 +11,53 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Plus, FileText, Clock, CheckCircle, XCircle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Plus,
+  FileText,
+  Clock,
+  CheckCircle,
+  XCircle,
+  Search,
+  Filter,
+  X,
+  MapPin,
+} from "lucide-react";
 import type { ReportWithRelations } from "@shared/schema";
+
+const STATUS_BADGE: Record<string, JSX.Element> = {
+  pending: <Badge className="bg-yellow-100 text-yellow-800 border-0 flex items-center gap-1"><Clock className="w-3 h-3" />Pending</Badge>,
+  approved: <Badge className="bg-green-100 text-green-800 border-0 flex items-center gap-1"><CheckCircle className="w-3 h-3" />Approved</Badge>,
+  needs_revision: <Badge className="bg-orange-100 text-orange-800 border-0 flex items-center gap-1"><XCircle className="w-3 h-3" />Needs Revision</Badge>,
+  rejected: <Badge className="bg-red-100 text-red-800 border-0 flex items-center gap-1"><XCircle className="w-3 h-3" />Rejected</Badge>,
+};
+
+const ROLE_COLOR: Record<string, string> = {
+  employee: "bg-blue-500",
+  supervisor: "bg-green-500",
+  manager: "bg-purple-500",
+  executive: "bg-amber-500",
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  weekly: "Weekly",
+  project: "Project Update",
+  goal_review: "Goal Review",
+  special: "Special Assignment",
+};
+
+function initials(firstName?: string, lastName?: string, email?: string) {
+  if (firstName && lastName) return `${firstName[0]}${lastName[0]}`.toUpperCase();
+  if (email) return email.substring(0, 2).toUpperCase();
+  return "U";
+}
 
 export default function Reports() {
   const { toast } = useToast();
@@ -20,172 +65,265 @@ export default function Reports() {
   const [showReportModal, setShowReportModal] = useState(false);
   const [selectedReport, setSelectedReport] = useState<ReportWithRelations | null>(null);
 
-  // Redirect to login if not authenticated
+  // Filters
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("all");
+
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
-      setTimeout(() => {
-        window.location.href = "/login";
-      }, 500);
-      return;
+      setTimeout(() => { window.location.href = "/login"; }, 500);
     }
-  }, [isAuthenticated, isLoading, toast]);
+  }, [isAuthenticated, isLoading]);
 
-  const { data: reports, isLoading: reportsLoading, error } = useQuery({
+  const { data: reports = [], isLoading: reportsLoading, error } = useQuery<ReportWithRelations[]>({
     queryKey: ["/api/reports"],
     retry: false,
   });
 
   useEffect(() => {
     if (error && isUnauthorizedError(error as Error)) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
-      setTimeout(() => {
-        window.location.href = "/login";
-      }, 500);
-      return;
+      setTimeout(() => { window.location.href = "/login"; }, 500);
     }
-  }, [error, toast]);
+  }, [error]);
+
+  const hasFilters = search || statusFilter !== "all" || typeFilter !== "all" || dateFilter !== "all";
+
+  const filtered = useMemo(() => {
+    let list = reports;
+
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter(r =>
+        r.title?.toLowerCase().includes(q) ||
+        r.tasksCompleted?.toLowerCase().includes(q) ||
+        r.employee?.firstName?.toLowerCase().includes(q) ||
+        r.employee?.lastName?.toLowerCase().includes(q)
+      );
+    }
+
+    if (statusFilter !== "all") {
+      list = list.filter(r => r.status === statusFilter);
+    }
+
+    if (typeFilter !== "all") {
+      list = list.filter(r => r.type === typeFilter);
+    }
+
+    if (dateFilter !== "all") {
+      const now = new Date();
+      list = list.filter(r => {
+        const d = new Date(r.submittedAt);
+        if (dateFilter === "week") {
+          const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          return d >= weekAgo;
+        }
+        if (dateFilter === "month") {
+          const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          return d >= monthAgo;
+        }
+        return true;
+      });
+    }
+
+    return list;
+  }, [reports, search, statusFilter, typeFilter, dateFilter]);
+
+  const clearFilters = () => {
+    setSearch("");
+    setStatusFilter("all");
+    setTypeFilter("all");
+    setDateFilter("all");
+  };
 
   if (isLoading || !isAuthenticated || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600" />
       </div>
     );
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "pending":
-        return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800"><Clock className="w-3 h-3 mr-1" />Pending</Badge>;
-      case "approved":
-        return <Badge variant="secondary" className="bg-green-100 text-green-800"><CheckCircle className="w-3 h-3 mr-1" />Approved</Badge>;
-      case "needs_revision":
-        return <Badge variant="secondary" className="bg-red-100 text-red-800"><XCircle className="w-3 h-3 mr-1" />Needs Revision</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
-
-  const getRoleColor = (role: string) => {
-    switch (role) {
-      case "employee": return "role-employee";
-      case "supervisor": return "role-supervisor";
-      case "manager": return "role-manager";
-      case "executive": return "role-executive";
-      default: return "bg-gray-500";
-    }
-  };
-
-  const getInitials = (firstName?: string, lastName?: string, email?: string) => {
-    if (firstName && lastName) {
-      return `${firstName[0]}${lastName[0]}`.toUpperCase();
-    }
-    if (email) {
-      return email.substring(0, 2).toUpperCase();
-    }
-    return "U";
-  };
-
   if (selectedReport) {
-    return (
-      <ReportReview 
-        report={selectedReport} 
-        onBack={() => setSelectedReport(null)}
-      />
-    );
+    return <ReportReview report={selectedReport} onBack={() => setSelectedReport(null)} />;
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
-      
       <div className="flex">
         <Sidebar />
-        
         <main className="flex-1 p-6">
-          <div className="mb-8">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Reports</h2>
-                <p className="text-gray-600">
-                  {user.role === 'employee' 
-                    ? "Manage your performance reports and feedback." 
-                    : "Review and manage team reports."}
-                </p>
-              </div>
-              {user.role === 'employee' && (
-                <Button 
-                  onClick={() => setShowReportModal(true)}
-                  className="bg-primary hover:bg-primary/90"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create Report
-                </Button>
-              )}
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Reports</h2>
+              <p className="text-gray-500 text-sm mt-1">
+                {user.role === "employee"
+                  ? "Your submitted performance reports"
+                  : "Reports from your team members"}
+              </p>
             </div>
+            {user.role === "employee" && (
+              <Button
+                onClick={() => setShowReportModal(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                New Report
+              </Button>
+            )}
           </div>
 
+          {/* Filter bar */}
+          <Card className="mb-6 shadow-none border border-gray-200">
+            <CardContent className="p-4">
+              <div className="flex flex-wrap gap-3 items-center">
+                {/* Search */}
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    placeholder="Search by title or name..."
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    className="pl-9 h-9 text-sm"
+                  />
+                </div>
+
+                {/* Status */}
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-36 h-9 text-sm">
+                    <Filter className="h-3.5 w-3.5 mr-1 text-gray-400" />
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="approved">Approved</SelectItem>
+                    <SelectItem value="needs_revision">Needs Revision</SelectItem>
+                    <SelectItem value="rejected">Rejected</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Type */}
+                <Select value={typeFilter} onValueChange={setTypeFilter}>
+                  <SelectTrigger className="w-40 h-9 text-sm">
+                    <SelectValue placeholder="Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="weekly">Weekly</SelectItem>
+                    <SelectItem value="project">Project Update</SelectItem>
+                    <SelectItem value="goal_review">Goal Review</SelectItem>
+                    <SelectItem value="special">Special Assignment</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Date range */}
+                <Select value={dateFilter} onValueChange={setDateFilter}>
+                  <SelectTrigger className="w-36 h-9 text-sm">
+                    <SelectValue placeholder="Date" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Time</SelectItem>
+                    <SelectItem value="week">This Week</SelectItem>
+                    <SelectItem value="month">This Month</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {hasFilters && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearFilters}
+                    className="h-9 text-gray-500 hover:text-gray-700 gap-1"
+                  >
+                    <X className="h-4 w-4" />
+                    Clear
+                  </Button>
+                )}
+              </div>
+
+              {hasFilters && (
+                <p className="text-xs text-gray-500 mt-2">
+                  Showing {filtered.length} of {reports.length} reports
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Results */}
           {reportsLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {[...Array(6)].map((_, i) => (
                 <Card key={i} className="animate-pulse">
                   <CardContent className="p-6">
-                    <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                    <div className="h-3 bg-gray-200 rounded w-1/2 mb-4"></div>
-                    <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+                    <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
+                    <div className="h-3 bg-gray-200 rounded w-1/2 mb-4" />
+                    <div className="h-8 bg-gray-200 rounded w-1/4" />
                   </CardContent>
                 </Card>
               ))}
             </div>
-          ) : reports && reports.length > 0 ? (
+          ) : filtered.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {reports.map((report: ReportWithRelations) => (
-                <Card 
-                  key={report.id} 
-                  className="cursor-pointer hover:shadow-md transition-shadow"
+              {filtered.map((report: ReportWithRelations) => (
+                <Card
+                  key={report.id}
+                  className="cursor-pointer hover:shadow-md transition-shadow border border-gray-200"
                   onClick={() => setSelectedReport(report)}
                 >
-                  <CardHeader className="pb-4">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg flex items-center">
-                        <FileText className="w-5 h-5 mr-2 text-primary" />
-                        {report.title}
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <CardTitle className="text-base leading-tight flex items-start gap-2">
+                        <FileText className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                        <span className="line-clamp-2">{report.title}</span>
                       </CardTitle>
-                      {getStatusBadge(report.status)}
+                      {STATUS_BADGE[report.status || "pending"] || <Badge variant="outline">{report.status}</Badge>}
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="flex items-center space-x-3 mb-4">
-                      <Avatar className="w-10 h-10">
-                        <AvatarFallback className={`${getRoleColor(report.employee?.role || 'employee')} text-white text-sm font-medium`}>
-                          {getInitials(report.employee?.firstName, report.employee?.lastName, report.employee?.email)}
+                    <div className="flex items-center gap-3 mb-3">
+                      <Avatar className="w-9 h-9">
+                        <AvatarFallback className={`${ROLE_COLOR[report.employee?.role || "employee"]} text-white text-xs`}>
+                          {initials(report.employee?.firstName, report.employee?.lastName, report.employee?.email)}
                         </AvatarFallback>
                       </Avatar>
-                      <div>
-                        <p className="font-medium text-gray-900">
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm text-gray-900 truncate">
                           {report.employee?.firstName} {report.employee?.lastName || report.employee?.email}
                         </p>
-                        <p className="text-sm text-gray-600 capitalize">{report.type.replace('_', ' ')}</p>
+                        <p className="text-xs text-gray-500 capitalize">
+                          {TYPE_LABELS[report.type] || report.type}
+                        </p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm text-gray-500">
-                        {new Date(report.submittedAt).toLocaleDateString()}
-                      </p>
-                      {report.rating && (
-                        <p className="text-sm font-medium text-gray-900">
-                          Rating: {report.rating}/5
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        {report.location && (
+                          <div className="flex items-center gap-1 text-xs text-green-600">
+                            <MapPin className="h-3 w-3" />
+                            <span>GPS</span>
+                          </div>
+                        )}
+                        {report.priority && report.priority !== "normal" && (
+                          <Badge className={`text-xs border-0 ${report.priority === "urgent" ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700"}`}>
+                            {report.priority}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-gray-500">
+                          {new Date(report.submittedAt).toLocaleDateString()}
                         </p>
-                      )}
+                        {report.rating && (
+                          <p className="text-xs font-medium text-gray-700">
+                            ⭐ {report.rating}/5
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -195,20 +333,27 @@ export default function Reports() {
             <Card>
               <CardContent className="pt-6">
                 <div className="text-center py-12">
-                  <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No reports found</h3>
-                  <p className="text-gray-600 mb-6">
-                    {user.role === 'employee' 
-                      ? "You haven't submitted any reports yet." 
-                      : "No reports have been submitted to you yet."}
+                  <FileText className="w-14 w-14 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-800 mb-1">
+                    {hasFilters ? "No reports match your filters" : "No reports yet"}
+                  </h3>
+                  <p className="text-gray-500 text-sm mb-4">
+                    {hasFilters
+                      ? "Try adjusting or clearing the filters above."
+                      : user.role === "employee"
+                      ? "Submit your first performance report to get started."
+                      : "No reports have been submitted yet."}
                   </p>
-                  {user.role === 'employee' && (
-                    <Button 
-                      onClick={() => setShowReportModal(true)}
-                      className="bg-primary hover:bg-primary/90"
-                    >
+                  {hasFilters && (
+                    <Button variant="outline" onClick={clearFilters}>
+                      <X className="w-4 h-4 mr-2" />
+                      Clear Filters
+                    </Button>
+                  )}
+                  {!hasFilters && user.role === "employee" && (
+                    <Button onClick={() => setShowReportModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
                       <Plus className="w-4 h-4 mr-2" />
-                      Create Your First Report
+                      Create First Report
                     </Button>
                   )}
                 </div>

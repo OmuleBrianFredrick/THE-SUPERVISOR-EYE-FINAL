@@ -27,6 +27,8 @@ import Department from "@/pages/department";
 import Resources from "@/pages/resources";
 import ForgotPassword from "@/pages/forgot-password";
 import ResetPassword from "@/pages/reset-password";
+import Tasks from "@/pages/tasks";
+import Timeline from "@/pages/timeline";
 import NotFound from "@/pages/not-found";
 
 function RoleRedirect() {
@@ -95,6 +97,8 @@ function Router() {
 
           {/* Common pages */}
           <Route path="/reports" component={Reports} />
+          <Route path="/tasks" component={Tasks} />
+          <Route path="/timeline" component={Timeline} />
           <Route path="/team" component={Team} />
           <Route path="/dashboard" component={Dashboard} />
           <Route path="/settings" component={Settings} />

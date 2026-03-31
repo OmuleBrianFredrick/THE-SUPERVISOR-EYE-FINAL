@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -16,17 +15,51 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { X, Upload } from "lucide-react";
+import { X, MapPin, Loader2, CheckCircle2 } from "lucide-react";
 
 interface ReportModalProps {
   onClose: () => void;
 }
 
+// Template fields based on report type
+const TEMPLATES: Record<string, { tasksLabel: string; tasksPh: string; challengesPh: string; goalsPh: string; extra?: { label: string; key: string; ph: string }[] }> = {
+  weekly: {
+    tasksLabel: "Tasks Completed This Week *",
+    tasksPh: "List your completed tasks for this week...",
+    challengesPh: "Any blockers or challenges you faced...",
+    goalsPh: "What are you planning for next week...",
+  },
+  project: {
+    tasksLabel: "Project Progress & Deliverables *",
+    tasksPh: "Describe project milestones achieved, features delivered, or phase completed...",
+    challengesPh: "Technical issues, resource constraints, or scope challenges...",
+    goalsPh: "Next project milestones and planned actions...",
+    extra: [
+      { label: "Client / Stakeholder", key: "clientName", ph: "e.g. Acme Corp or Internal" },
+    ],
+  },
+  goal_review: {
+    tasksLabel: "Goal Achievement Summary *",
+    tasksPh: "How well did you achieve your goals? List specific accomplishments...",
+    challengesPh: "What prevented full goal achievement or caused delays...",
+    goalsPh: "Revised or new goals for the next review period...",
+  },
+  special: {
+    tasksLabel: "Work Completed *",
+    tasksPh: "Describe the special assignment and what was accomplished...",
+    challengesPh: "Challenges, constraints, or unexpected issues...",
+    goalsPh: "Follow-up actions or next steps...",
+    extra: [
+      { label: "Assignment Reference", key: "reference", ph: "e.g. Inspection #42 or Site visit ID" },
+    ],
+  },
+};
+
 export default function ReportModal({ onClose }: ReportModalProps) {
   const { toast } = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  
+
   const [formData, setFormData] = useState({
     type: "",
     title: "",
@@ -34,84 +67,97 @@ export default function ReportModal({ onClose }: ReportModalProps) {
     tasksCompleted: "",
     challengesFaced: "",
     goalsNextPeriod: "",
+    clientName: "",
+    reference: "",
   });
+
+  const [location, setLocation] = useState<string | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+
+  const template = TEMPLATES[formData.type] || null;
 
   const createReportMutation = useMutation({
     mutationFn: async (reportData: any) => {
       await apiRequest("POST", "/api/reports", reportData);
     },
     onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Report submitted successfully!",
-      });
+      toast({ title: "Report submitted successfully!" });
       queryClient.invalidateQueries({ queryKey: ["/api/reports"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/timeline"] });
       onClose();
     },
-    onError: (error) => {
-      if (isUnauthorizedError(error as Error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-      toast({
-        title: "Error",
-        description: "Failed to submit report. Please try again.",
-        variant: "destructive",
-      });
+    onError: () => {
+      toast({ title: "Failed to submit report", variant: "destructive" });
     },
   });
 
+  const handleChange = (field: string, value: string) =>
+    setFormData(prev => ({ ...prev, [field]: value }));
+
+  const captureLocation = () => {
+    if (!navigator.geolocation) {
+      toast({ title: "Geolocation is not supported by your browser", variant: "destructive" });
+      return;
+    }
+    setLocationLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const coords = `${pos.coords.latitude.toFixed(6)},${pos.coords.longitude.toFixed(6)}`;
+        setLocation(coords);
+        setLocationLoading(false);
+        toast({ title: "Location captured", description: coords });
+      },
+      () => {
+        setLocationLoading(false);
+        toast({ title: "Could not get location", description: "Check your browser's location permissions.", variant: "destructive" });
+      },
+      { timeout: 10000 }
+    );
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.type || !formData.title || !formData.tasksCompleted) {
-      toast({
-        title: "Validation Error",
-        description: "Please fill in all required fields.",
-        variant: "destructive",
-      });
+      toast({ title: "Please fill in all required fields.", variant: "destructive" });
       return;
     }
 
-    createReportMutation.mutate(formData);
-  };
+    // Build tasksCompleted to include extra fields if present
+    let tasksContent = formData.tasksCompleted;
+    if (formData.clientName) tasksContent = `Client: ${formData.clientName}\n\n${tasksContent}`;
+    if (formData.reference) tasksContent = `Reference: ${formData.reference}\n\n${tasksContent}`;
 
-  const handleChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    createReportMutation.mutate({
+      type: formData.type,
+      title: formData.title,
+      priority: formData.priority,
+      tasksCompleted: tasksContent,
+      challengesFaced: formData.challengesFaced,
+      goalsNextPeriod: formData.goalsNextPeriod,
+      location: location || undefined,
+    });
   };
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center justify-between">
-            <DialogTitle className="text-xl font-semibold">Submit Performance Report</DialogTitle>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-            >
+            <DialogTitle className="text-xl font-semibold">Submit Report</DialogTitle>
+            <Button variant="ghost" size="sm" onClick={onClose} className="text-gray-400 hover:text-gray-600">
               <X className="h-5 w-5" />
             </Button>
           </div>
         </DialogHeader>
-        
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <Label htmlFor="type" className="text-sm font-medium text-gray-700 mb-2">
-                Report Type *
-              </Label>
-              <Select value={formData.type} onValueChange={(value) => handleChange("type", value)}>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Type + Priority */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Report Type *</Label>
+              <Select value={formData.type} onValueChange={v => handleChange("type", v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select report type" />
                 </SelectTrigger>
@@ -123,12 +169,10 @@ export default function ReportModal({ onClose }: ReportModalProps) {
                 </SelectContent>
               </Select>
             </div>
-            
-            <div>
-              <Label htmlFor="priority" className="text-sm font-medium text-gray-700 mb-2">
-                Priority Level
-              </Label>
-              <Select value={formData.priority} onValueChange={(value) => handleChange("priority", value)}>
+
+            <div className="space-y-1.5">
+              <Label>Priority Level</Label>
+              <Select value={formData.priority} onValueChange={v => handleChange("priority", v)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -141,84 +185,115 @@ export default function ReportModal({ onClose }: ReportModalProps) {
             </div>
           </div>
 
-          <div>
-            <Label htmlFor="title" className="text-sm font-medium text-gray-700 mb-2">
-              Report Title *
-            </Label>
+          {/* Title */}
+          <div className="space-y-1.5">
+            <Label>Report Title *</Label>
             <Input
-              id="title"
               value={formData.title}
-              onChange={(e) => handleChange("title", e.target.value)}
-              placeholder="Enter a descriptive title for your report"
-              className="w-full"
+              onChange={e => handleChange("title", e.target.value)}
+              placeholder="e.g. Week 12 Progress Update — Engineering"
             />
           </div>
-          
-          <div>
-            <Label htmlFor="tasksCompleted" className="text-sm font-medium text-gray-700 mb-2">
-              Tasks Completed *
-            </Label>
-            <Textarea
-              id="tasksCompleted"
-              value={formData.tasksCompleted}
-              onChange={(e) => handleChange("tasksCompleted", e.target.value)}
-              rows={4}
-              placeholder="List the tasks you've completed this period..."
-              className="w-full"
-            />
-          </div>
-          
-          <div>
-            <Label htmlFor="challengesFaced" className="text-sm font-medium text-gray-700 mb-2">
-              Challenges Faced
-            </Label>
-            <Textarea
-              id="challengesFaced"
-              value={formData.challengesFaced}
-              onChange={(e) => handleChange("challengesFaced", e.target.value)}
-              rows={3}
-              placeholder="Describe any challenges or obstacles..."
-              className="w-full"
-            />
-          </div>
-          
-          <div>
-            <Label htmlFor="goalsNextPeriod" className="text-sm font-medium text-gray-700 mb-2">
-              Goals for Next Period
-            </Label>
-            <Textarea
-              id="goalsNextPeriod"
-              value={formData.goalsNextPeriod}
-              onChange={(e) => handleChange("goalsNextPeriod", e.target.value)}
-              rows={3}
-              placeholder="What are your goals for the next period..."
-              className="w-full"
-            />
-          </div>
-          
-          <div>
-            <Label className="text-sm font-medium text-gray-700 mb-2">
-              Supporting Documents
-            </Label>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-              <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-              <p className="text-gray-600">Drop files here or click to upload</p>
-              <p className="text-sm text-gray-500 mt-1">PDF, DOC, JPG, PNG up to 10MB</p>
+
+          {/* Template-specific extra fields */}
+          {template?.extra?.map(field => (
+            <div key={field.key} className="space-y-1.5">
+              <Label>{field.label}</Label>
+              <Input
+                value={(formData as any)[field.key]}
+                onChange={e => handleChange(field.key, e.target.value)}
+                placeholder={field.ph}
+              />
             </div>
+          ))}
+
+          {/* Tasks completed */}
+          <div className="space-y-1.5">
+            <Label>{template?.tasksLabel || "Tasks Completed *"}</Label>
+            <Textarea
+              value={formData.tasksCompleted}
+              onChange={e => handleChange("tasksCompleted", e.target.value)}
+              rows={4}
+              placeholder={template?.tasksPh || "List the tasks you completed..."}
+            />
           </div>
-          
-          <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
-            <Button 
-              type="button" 
-              variant="outline"
-              onClick={onClose}
-              disabled={createReportMutation.isPending}
-            >
+
+          {/* Challenges */}
+          <div className="space-y-1.5">
+            <Label>Challenges Faced</Label>
+            <Textarea
+              value={formData.challengesFaced}
+              onChange={e => handleChange("challengesFaced", e.target.value)}
+              rows={3}
+              placeholder={template?.challengesPh || "Describe any challenges or obstacles..."}
+            />
+          </div>
+
+          {/* Goals */}
+          <div className="space-y-1.5">
+            <Label>Goals / Next Steps</Label>
+            <Textarea
+              value={formData.goalsNextPeriod}
+              onChange={e => handleChange("goalsNextPeriod", e.target.value)}
+              rows={3}
+              placeholder={template?.goalsPh || "What are your goals for the next period..."}
+            />
+          </div>
+
+          {/* GPS Location */}
+          <div className="space-y-1.5">
+            <Label>Field Location (Optional)</Label>
+            {location ? (
+              <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-green-700">Location captured</p>
+                  <p className="text-xs text-green-600 font-mono">{location}</p>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setLocation(null)}
+                  className="text-green-700 hover:text-green-900 shrink-0"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={captureLocation}
+                disabled={locationLoading}
+                className="w-full border-dashed border-gray-300 text-gray-600 hover:border-blue-400 hover:text-blue-600"
+              >
+                {locationLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Getting location...
+                  </>
+                ) : (
+                  <>
+                    <MapPin className="h-4 w-4 mr-2" />
+                    Capture GPS Location
+                  </>
+                )}
+              </Button>
+            )}
+            <p className="text-xs text-gray-400">
+              Captures your current GPS coordinates as evidence of field activity.
+            </p>
+          </div>
+
+          {/* Submit */}
+          <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
+            <Button type="button" variant="outline" onClick={onClose} disabled={createReportMutation.isPending}>
               Cancel
             </Button>
-            <Button 
+            <Button
               type="submit"
-              className="bg-primary hover:bg-primary/90"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
               disabled={createReportMutation.isPending}
             >
               {createReportMutation.isPending ? "Submitting..." : "Submit Report"}

@@ -10,8 +10,6 @@ import {
   Users,
   BarChart3,
   Settings,
-  Calendar,
-  MessageSquare,
   Target,
   TrendingUp,
   Activity,
@@ -24,6 +22,8 @@ import {
   ChevronRight,
   Star,
   Network,
+  ClipboardList,
+  Clock,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -65,6 +65,8 @@ export default function Sidebar() {
     const commonItems = [
       { name: "Dashboard", href: getDashboardRoute(), icon: LayoutDashboard, badge: null },
       { name: "Reports", href: "/reports", icon: FileText, badge: null },
+      { name: "Tasks", href: "/tasks", icon: ClipboardList, badge: null },
+      { name: "Timeline", href: "/timeline", icon: Clock, badge: null },
       { name: "Team", href: "/team", icon: Users, badge: null, requiresRole: ["supervisor", "manager", "executive"] },
       { name: "Analytics", href: "/analytics", icon: BarChart3, badge: null, requiresRole: ["supervisor", "manager", "executive"] },
       { name: "Org Chart", href: "/org-chart", icon: Network, badge: null, requiresRole: ["supervisor", "manager", "executive"] },

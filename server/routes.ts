@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./auth";
-import { insertReportSchema, insertNotificationSchema, insertGoalSchema } from "@shared/schema";
+import { insertReportSchema, insertNotificationSchema, insertGoalSchema, insertTaskSchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -86,13 +86,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
 
-      const { status, limit = 20, offset = 0 } = req.query;
+      const { status, limit = 20, offset = 0, type, search, dateFrom, dateTo } = req.query;
+      let filters: any = { limit: parseInt(limit as string), offset: parseInt(offset as string) };
 
-      let filters: any = { limit: parseInt(limit), offset: parseInt(offset) };
-
-      if (status) {
-        filters.status = status;
-      }
+      if (status) filters.status = status;
+      if (type) filters.type = type;
+      if (search) filters.search = search;
+      if (dateFrom) filters.dateFrom = new Date(dateFrom as string);
+      if (dateTo) filters.dateTo = new Date(dateTo as string);
 
       // Filter based on role
       if (user.role === 'employee') {
@@ -404,6 +405,124 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting goal:", error);
       res.status(500).json({ message: "Failed to delete goal" });
+    }
+  });
+
+  // Task routes
+  app.get('/api/tasks', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      let filters: any = {};
+      if (user.role === 'employee') {
+        filters.assignedTo = userId;
+      } else {
+        // supervisors/managers/executives see tasks they assigned
+        filters.assignedBy = userId;
+      }
+
+      const taskList = await storage.getTasks(filters);
+      res.json(taskList);
+    } catch (error) {
+      console.error("Error fetching tasks:", error);
+      res.status(500).json({ message: "Failed to fetch tasks" });
+    }
+  });
+
+  app.post('/api/tasks', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "User not found" });
+      if (user.role === 'employee') return res.status(403).json({ message: "Employees cannot assign tasks" });
+
+      const taskData = insertTaskSchema.parse({
+        ...req.body,
+        assignedBy: userId,
+        deadline: req.body.deadline ? new Date(req.body.deadline) : undefined,
+      });
+
+      const task = await storage.createTask(taskData);
+
+      // Notify assigned user
+      await storage.createNotification({
+        userId: taskData.assignedTo,
+        type: 'task_assigned',
+        title: 'New Task Assigned',
+        message: `${user.firstName} ${user.lastName} assigned you a task: "${task.title}"`,
+        relatedTaskId: task.id,
+      });
+
+      res.json(task);
+    } catch (error) {
+      console.error("Error creating task:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid task data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create task" });
+    }
+  });
+
+  app.patch('/api/tasks/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const taskId = parseInt(req.params.id);
+      const userId = (req.session as any).userId;
+      const task = await storage.getTask(taskId);
+      if (!task) return res.status(404).json({ message: "Task not found" });
+
+      // Employees can only update tasks assigned to them; supervisors can update their own tasks
+      if (task.assignedTo !== userId && task.assignedBy !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const updated = await storage.updateTask(taskId, req.body);
+
+      // Notify assigner when employee completes a task
+      if (req.body.status === 'completed' && task.assignedTo === userId) {
+        await storage.createNotification({
+          userId: task.assignedBy,
+          type: 'task_completed',
+          title: 'Task Completed',
+          message: `A team member completed the task: "${task.title}"`,
+          relatedTaskId: taskId,
+        });
+      }
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating task:", error);
+      res.status(500).json({ message: "Failed to update task" });
+    }
+  });
+
+  app.delete('/api/tasks/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const taskId = parseInt(req.params.id);
+      const userId = (req.session as any).userId;
+      const task = await storage.getTask(taskId);
+      if (!task) return res.status(404).json({ message: "Task not found" });
+      if (task.assignedBy !== userId) return res.status(403).json({ message: "Only the assigner can delete this task" });
+      await storage.deleteTask(taskId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting task:", error);
+      res.status(500).json({ message: "Failed to delete task" });
+    }
+  });
+
+  // Activity timeline route
+  app.get('/api/timeline', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "User not found" });
+      const timeline = await storage.getActivityTimeline(userId, user.role);
+      res.json(timeline);
+    } catch (error) {
+      console.error("Error fetching timeline:", error);
+      res.status(500).json({ message: "Failed to fetch timeline" });
     }
   });
 
