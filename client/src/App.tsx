@@ -29,7 +29,9 @@ import ForgotPassword from "@/pages/forgot-password";
 import ResetPassword from "@/pages/reset-password";
 import Tasks from "@/pages/tasks";
 import Timeline from "@/pages/timeline";
+import CompleteProfile from "@/pages/complete-profile";
 import NotFound from "@/pages/not-found";
+import SessionWarning from "@/components/session-warning";
 
 function RoleRedirect() {
   const { user } = useAuth();
@@ -72,6 +74,7 @@ function Router() {
       <Route path="/register" component={Register} />
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
+      <Route path="/complete-profile" component={CompleteProfile} />
 
       {/* Public landing */}
       <Route path="/landing" component={Landing} />
@@ -119,6 +122,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
+        <SessionWarning />
         <Router />
       </TooltipProvider>
     </QueryClientProvider>

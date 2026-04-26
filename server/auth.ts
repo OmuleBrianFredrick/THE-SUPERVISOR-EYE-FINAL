@@ -236,7 +236,8 @@ export async function setupAuth(app: Express) {
       }
 
       // Find or create the user
-      let user = await storage.getUserByEmail(payload.email);
+      const existingUser = await storage.getUserByEmail(payload.email);
+      let user = existingUser;
 
       if (!user) {
         const userId = crypto.randomUUID();
@@ -252,6 +253,11 @@ export async function setupAuth(app: Express) {
       }
 
       (req.session as any).userId = user.id;
+
+      const isNewUser = !existingUser;
+      if (isNewUser || !user.firstName) {
+        return res.redirect("/complete-profile");
+      }
 
       const roleRoutes: Record<string, string> = {
         employee: "/employee-dashboard",

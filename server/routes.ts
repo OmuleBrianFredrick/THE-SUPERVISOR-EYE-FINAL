@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./auth";
 import { insertReportSchema, insertNotificationSchema, insertGoalSchema, insertTaskSchema } from "@shared/schema";
 import { z } from "zod";
+import { sendEmail, buildNotificationEmail } from "./email";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -20,6 +21,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // Complete profile (for Google OAuth new users)
+  app.patch('/api/auth/complete-profile', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const { firstName, lastName, department, role, supervisorId } = req.body;
+      const updated = await storage.updateUserRole(userId, role || 'employee', supervisorId && supervisorId !== 'none' ? supervisorId : undefined);
+      if (updated) {
+        await storage.updateUserProfile(userId, { firstName, lastName, department });
+      }
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "User not found" });
+      const { password: _, ...safeUser } = user as any;
+      res.json(safeUser);
+    } catch (error) {
+      console.error("Complete profile error:", error);
+      res.status(500).json({ message: "Failed to update profile" });
     }
   });
 
@@ -57,15 +77,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const report = await storage.createReport(reportData);
 
-      // Create notification for supervisor
+      // Create notification for supervisor + send email
       if (user.supervisorId) {
+        const notifTitle = 'New Report Submitted';
+        const notifMessage = `${user.firstName} ${user.lastName} has submitted a new ${req.body.type} report`;
         await storage.createNotification({
           userId: user.supervisorId,
           type: 'report_submitted',
-          title: 'New Report Submitted',
-          message: `${user.firstName} ${user.lastName} has submitted a new ${req.body.type} report`,
+          title: notifTitle,
+          message: notifMessage,
           relatedReportId: report.id,
         });
+        const supervisor = await storage.getUser(user.supervisorId);
+        if (supervisor?.email) {
+          await sendEmail({
+            to: supervisor.email,
+            subject: `[The Supervisor] ${notifTitle}`,
+            html: buildNotificationEmail(notifTitle, notifMessage),
+          });
+        }
       }
 
       res.json(report);
@@ -166,20 +196,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const updatedReport = await storage.reviewReport(reportId, feedback, rating, status);
 
-      // Create notification for employee
+      // Create notification for employee + send email
       if (report.employeeId) {
         const notificationType = status === 'approved' ? 'report_reviewed' : 'revision_requested';
-        const message = status === 'approved' 
+        const notifTitle = status === 'approved' ? 'Report Approved' : 'Revision Requested';
+        const notifMessage = status === 'approved'
           ? `Your ${report.type} report has been approved with rating ${rating}/5`
           : `Your ${report.type} report needs revision. Please review the feedback.`;
 
         await storage.createNotification({
           userId: report.employeeId,
           type: notificationType,
-          title: status === 'approved' ? 'Report Approved' : 'Revision Requested',
-          message,
+          title: notifTitle,
+          message: notifMessage,
           relatedReportId: reportId,
         });
+        const employee = await storage.getUser(report.employeeId);
+        if (employee?.email) {
+          await sendEmail({
+            to: employee.email,
+            subject: `[The Supervisor] ${notifTitle}`,
+            html: buildNotificationEmail(notifTitle, notifMessage),
+          });
+        }
       }
 
       res.json(updatedReport);
@@ -446,14 +485,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const task = await storage.createTask(taskData);
 
-      // Notify assigned user
+      // Notify assigned user + send email
+      const taskNotifTitle = 'New Task Assigned';
+      const taskNotifMessage = `${user.firstName} ${user.lastName} assigned you a task: "${task.title}"`;
       await storage.createNotification({
         userId: taskData.assignedTo,
         type: 'task_assigned',
-        title: 'New Task Assigned',
-        message: `${user.firstName} ${user.lastName} assigned you a task: "${task.title}"`,
+        title: taskNotifTitle,
+        message: taskNotifMessage,
         relatedTaskId: task.id,
       });
+      const assignee = await storage.getUser(taskData.assignedTo);
+      if (assignee?.email) {
+        await sendEmail({
+          to: assignee.email,
+          subject: `[The Supervisor] ${taskNotifTitle}`,
+          html: buildNotificationEmail(taskNotifTitle, taskNotifMessage),
+        });
+      }
 
       res.json(task);
     } catch (error) {
@@ -479,15 +528,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const updated = await storage.updateTask(taskId, req.body);
 
-      // Notify assigner when employee completes a task
+      // Notify assigner when employee completes a task + send email
       if (req.body.status === 'completed' && task.assignedTo === userId) {
+        const completeTitle = 'Task Completed';
+        const completeMessage = `A team member completed the task: "${task.title}"`;
         await storage.createNotification({
           userId: task.assignedBy,
           type: 'task_completed',
-          title: 'Task Completed',
-          message: `A team member completed the task: "${task.title}"`,
+          title: completeTitle,
+          message: completeMessage,
           relatedTaskId: taskId,
         });
+        const assigner = await storage.getUser(task.assignedBy);
+        if (assigner?.email) {
+          await sendEmail({
+            to: assigner.email,
+            subject: `[The Supervisor] ${completeTitle}`,
+            html: buildNotificationEmail(completeTitle, completeMessage),
+          });
+        }
       }
 
       res.json(updated);

@@ -96,6 +96,13 @@ THE SUPERVISOR is a hierarchical performance reporting and feedback platform des
 - `SESSION_SECRET`: Session encryption key
 - `REPLIT_DOMAINS`: Allowed domains for Replit Auth
 - `ISSUER_URL`: OIDC issuer URL (defaults to Replit)
+- `GOOGLE_CLIENT_ID`: Google OAuth client ID
+- `GOOGLE_CLIENT_SECRET`: Google OAuth client secret
+- `SMTP_HOST`: (Optional) SMTP server for email notifications
+- `SMTP_PORT`: (Optional) SMTP port, defaults to 587
+- `SMTP_USER`: (Optional) SMTP username/email
+- `SMTP_PASS`: (Optional) SMTP password
+- `SMTP_FROM`: (Optional) From address for outgoing emails
 
 ## Changelog
 - July 06, 2025. Initial setup

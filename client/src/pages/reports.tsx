@@ -29,7 +29,14 @@ import {
   Filter,
   X,
   MapPin,
+  Download,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { ReportWithRelations } from "@shared/schema";
 
 const STATUS_BADGE: Record<string, JSX.Element> = {
@@ -57,6 +64,93 @@ function initials(firstName?: string, lastName?: string, email?: string) {
   if (firstName && lastName) return `${firstName[0]}${lastName[0]}`.toUpperCase();
   if (email) return email.substring(0, 2).toUpperCase();
   return "U";
+}
+
+function exportToCSV(reports: ReportWithRelations[]) {
+  const headers = ["ID", "Title", "Type", "Status", "Priority", "Employee", "Submitted", "Rating", "GPS"];
+  const rows = reports.map(r => [
+    r.id,
+    `"${(r.title || "").replace(/"/g, '""')}"`,
+    r.type || "",
+    r.status || "",
+    r.priority || "",
+    `"${r.employee?.firstName || ""} ${r.employee?.lastName || ""}".trim()`,
+    r.submittedAt ? new Date(r.submittedAt).toLocaleDateString() : "",
+    r.rating || "",
+    r.location || "",
+  ]);
+  const csv = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `reports-${new Date().toISOString().split("T")[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function exportToPDF(reports: ReportWithRelations[]) {
+  const { jsPDF } = await import("jspdf");
+  const doc = new jsPDF();
+
+  doc.setFontSize(18);
+  doc.setTextColor(30, 58, 95);
+  doc.text("THE SUPERVISOR", 14, 18);
+  doc.setFontSize(11);
+  doc.setTextColor(100);
+  doc.text("Performance & Reporting Platform — Reports Export", 14, 26);
+  doc.setFontSize(9);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 32);
+
+  doc.setDrawColor(200);
+  doc.line(14, 35, 196, 35);
+
+  let y = 42;
+  const lineHeight = 7;
+
+  const colWidths = [10, 58, 22, 22, 20, 34, 18];
+  const headers = ["#", "Title", "Type", "Status", "Priority", "Employee", "Rating"];
+
+  doc.setFontSize(8);
+  doc.setTextColor(255);
+  doc.setFillColor(37, 99, 235);
+  doc.rect(14, y - 4, 182, 7, "F");
+  let x = 14;
+  headers.forEach((h, i) => {
+    doc.text(h, x + 2, y);
+    x += colWidths[i];
+  });
+
+  y += lineHeight;
+  doc.setTextColor(40);
+
+  reports.forEach((r, idx) => {
+    if (y > 270) {
+      doc.addPage();
+      y = 20;
+    }
+    if (idx % 2 === 0) {
+      doc.setFillColor(245, 247, 250);
+      doc.rect(14, y - 4, 182, 7, "F");
+    }
+    const cols = [
+      String(r.id),
+      (r.title || "").substring(0, 30),
+      (r.type || "").replace("_", " "),
+      r.status || "",
+      r.priority || "",
+      `${r.employee?.firstName || ""} ${r.employee?.lastName || ""}`.trim().substring(0, 20),
+      r.rating ? `${r.rating}/5` : "-",
+    ];
+    x = 14;
+    cols.forEach((c, i) => {
+      doc.text(c, x + 2, y);
+      x += colWidths[i];
+    });
+    y += lineHeight;
+  });
+
+  doc.save(`reports-${new Date().toISOString().split("T")[0]}.pdf`);
 }
 
 export default function Reports() {
@@ -165,15 +259,37 @@ export default function Reports() {
                   : "Reports from your team members"}
               </p>
             </div>
-            {user.role === "employee" && (
-              <Button
-                onClick={() => setShowReportModal(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                New Report
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              {filtered.length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <Download className="w-4 h-4" />
+                      Export
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => exportToCSV(filtered)}>
+                      <FileText className="w-4 h-4 mr-2 text-green-600" />
+                      Export as CSV
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => exportToPDF(filtered)}>
+                      <FileText className="w-4 h-4 mr-2 text-red-600" />
+                      Export as PDF
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              {user.role === "employee" && (
+                <Button
+                  onClick={() => setShowReportModal(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  New Report
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Filter bar */}
