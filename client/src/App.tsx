@@ -109,7 +109,7 @@ function Router() {
           <Route path="/org-chart" component={OrgChart} />
         </>
       ) : (
-        <Route path="/" component={Login} />
+        <Route path="/" component={Landing} />
       )}
 
       <Route component={NotFound} />
