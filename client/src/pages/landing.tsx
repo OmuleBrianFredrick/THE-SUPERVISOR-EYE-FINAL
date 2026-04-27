@@ -10,6 +10,7 @@ import {
   Crown,
   Shield,
   ChevronRight,
+  ChevronDown,
   UserPlus,
   Star,
   TrendingUp,
@@ -32,12 +33,230 @@ import {
   X,
   MapPin,
   Globe,
+  Check,
+  HelpCircle,
+  Zap,
+  Eye,
+  Settings,
+  PieChart,
 } from "lucide-react";
 import UserRegistrationModal from "@/components/auth/user-registration-modal";
 
 export default function Landing() {
   const [showRegistration, setShowRegistration] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
+
+  const pricingTiers = [
+    {
+      name: "Starter",
+      price: "$49",
+      period: "/month",
+      tagline: "Perfect for small teams getting started",
+      users: "Up to 15 users",
+      color: "border-gray-200",
+      buttonStyle: "border border-blue-600 text-blue-600 hover:bg-blue-50",
+      highlight: false,
+      features: [
+        "All 4 organizational roles",
+        "Report submission & review",
+        "Task assignment workflow",
+        "Basic analytics dashboard",
+        "Email notifications",
+        "Email support",
+      ],
+    },
+    {
+      name: "Growth",
+      price: "$149",
+      period: "/month",
+      tagline: "For growing teams that need more insight",
+      users: "Up to 75 users",
+      color: "border-blue-600",
+      buttonStyle: "bg-blue-600 hover:bg-blue-700 text-white",
+      highlight: true,
+      features: [
+        "Everything in Starter",
+        "Performance ratings & history",
+        "Goals tracking system",
+        "Activity timelines per user",
+        "CSV export",
+        "Priority support",
+      ],
+    },
+    {
+      name: "Business",
+      price: "$399",
+      period: "/month",
+      tagline: "Built for multi-department organizations",
+      users: "Up to 300 users",
+      color: "border-gray-200",
+      buttonStyle: "border border-blue-600 text-blue-600 hover:bg-blue-50",
+      highlight: false,
+      features: [
+        "Everything in Growth",
+        "PDF export & reporting",
+        "Org chart visualization",
+        "Advanced cross-team analytics",
+        "Department comparisons",
+        "Dedicated onboarding support",
+      ],
+    },
+    {
+      name: "Enterprise",
+      price: "Custom",
+      period: "",
+      tagline: "Unlimited scale with dedicated support",
+      users: "Unlimited users",
+      color: "border-gray-200",
+      buttonStyle: "border border-gray-900 text-gray-900 hover:bg-gray-50",
+      highlight: false,
+      features: [
+        "Everything in Business",
+        "Custom integrations & API",
+        "SLA uptime guarantee",
+        "Custom reporting templates",
+        "Dedicated account manager",
+        "White-label option",
+      ],
+    },
+  ];
+
+  const roleSections = [
+    {
+      role: "Employee",
+      tagline: "The Foundation of Every Report",
+      icon: User,
+      color: "bg-blue-600",
+      lightColor: "bg-blue-50",
+      textColor: "text-blue-700",
+      borderColor: "border-blue-200",
+      description: "Employees are the starting point of every accountability cycle. Their dashboard is focused and personal — they see only their own workspace, tasks, and performance history.",
+      responsibilities: [
+        "Submit structured performance reports each work period",
+        "Document tasks completed, challenges faced, and pending work",
+        "Track personal goals from Not Started through to Completed",
+        "Respond to revision requests from their supervisor",
+        "View performance ratings and written feedback received",
+        "Monitor their full activity timeline and history",
+      ],
+      cannot: [
+        "See other employees' reports or personal data",
+        "Access team analytics or management dashboards",
+        "Assign tasks or review anyone else's submissions",
+      ],
+    },
+    {
+      role: "Supervisor",
+      tagline: "The Core of Day-to-Day Accountability",
+      icon: Users,
+      color: "bg-green-600",
+      lightColor: "bg-green-50",
+      textColor: "text-green-700",
+      borderColor: "border-green-200",
+      description: "Supervisors carry the most active administrative role in the platform. They sit between the employees doing the work and the managers overseeing outcomes — acting as both task-givers and quality verifiers.",
+      responsibilities: [
+        "Assign tasks to team members with deadlines and priority levels",
+        "Review every employee report in their team's submission queue",
+        "Approve, request revision, or reject reports with written feedback",
+        "Rate employee performance on a 1–5 star scale per report",
+        "Monitor which team members have submitted, are pending, or have missed deadlines",
+        "View the full activity timeline for any employee on their team",
+      ],
+      cannot: [
+        "Access reports or data from employees outside their team",
+        "See cross-department analytics or other supervisors' teams",
+        "Modify user accounts or configure system settings",
+      ],
+    },
+    {
+      role: "Manager",
+      tagline: "Strategic Oversight Across Teams",
+      icon: Briefcase,
+      color: "bg-purple-600",
+      lightColor: "bg-purple-50",
+      textColor: "text-purple-700",
+      borderColor: "border-purple-200",
+      description: "Managers do not review individual reports — they see the aggregated picture across all teams under their departments. Their job is to identify patterns, bottlenecks, and opportunities.",
+      responsibilities: [
+        "Monitor submission and review rates across all supervised teams",
+        "Compare performance across multiple supervisors' teams",
+        "Identify high performers and underperformers by department",
+        "Track task completion rates and overdue assignments",
+        "Access cross-team visibility for resource planning",
+        "Generate department-level performance summaries",
+      ],
+      cannot: [
+        "Review or act on individual employee reports directly",
+        "Access departments or teams outside their assigned scope",
+        "Manage user accounts or system-level configurations",
+      ],
+    },
+    {
+      role: "Executive",
+      tagline: "Full Organizational Control",
+      icon: Crown,
+      color: "bg-amber-600",
+      lightColor: "bg-amber-50",
+      textColor: "text-amber-700",
+      borderColor: "border-amber-200",
+      description: "Executives have access to every layer of the platform — both operational data and system administration. They see the entire organization at once and have the authority to shape how it is structured.",
+      responsibilities: [
+        "Access a full org-wide command dashboard with live performance data",
+        "Manage all user accounts — add, edit, assign roles, or deactivate",
+        "Define and update the organizational hierarchy and reporting chain",
+        "View the complete activity and audit trail for any user or team",
+        "Export org-wide reports to CSV or PDF for board and compliance reporting",
+        "Configure system-wide settings and platform preferences",
+      ],
+      cannot: [
+        "No restrictions — Executives have full system access",
+      ],
+    },
+  ];
+
+  const faqs = [
+    {
+      q: "How long does it take to set up the platform for our organization?",
+      a: "Most organizations are fully set up and have their first reports submitted within one business day. The onboarding flow is designed to be completed without any technical help from an IT team.",
+    },
+    {
+      q: "Can employees sign in with Google instead of creating a separate password?",
+      a: "Yes. The platform supports both email/password and Google sign-in. Team members can use whichever method they prefer, and both connect to the same account seamlessly.",
+    },
+    {
+      q: "What happens if an employee submits a report to the wrong supervisor?",
+      a: "Reports are automatically routed to the designated supervisor set at account creation. An executive can update supervisor assignments at any time from the user management panel.",
+    },
+    {
+      q: "Is our organization's data kept private from other organizations on the platform?",
+      a: "Completely. Each organization's data is fully isolated. No employee, supervisor, manager, or executive from one organization can see any data from another organization.",
+    },
+    {
+      q: "What happens when someone leaves the organization?",
+      a: "An executive can deactivate any user account immediately. The user loses access right away, but all their historical reports, ratings, and activity remain in the system for your records.",
+    },
+    {
+      q: "Can reports be exported for audits or board presentations?",
+      a: "Yes. Reports can be exported to CSV for spreadsheet analysis or PDF for formal presentation and filing. Export is available from the Reports section for supervisors and above.",
+    },
+    {
+      q: "Do we need IT staff to maintain the platform after setup?",
+      a: "No. THE SUPERVISOR is fully cloud-hosted. No server maintenance, updates, or infrastructure management is required from your side. All updates are deployed automatically.",
+    },
+    {
+      q: "Can we have multiple departments within one organization account?",
+      a: "Yes. The platform is built for multi-department organizations. Managers are scoped to their departments, and executives see across all of them in one unified dashboard.",
+    },
+    {
+      q: "Is there a free trial available?",
+      a: "Yes. All plans include a 14-day free trial with no credit card required. You get access to all features of the selected plan during the trial period.",
+    },
+    {
+      q: "Can the platform scale as our organization grows?",
+      a: "Absolutely. You can upgrade your plan at any time as your team grows. The Enterprise plan supports unlimited users and can be customized to match your exact organizational structure.",
+    },
+  ];
 
   const handleRoleBasedLogin = (role: string) => {
     sessionStorage.setItem("intended_role", role);
@@ -265,8 +484,10 @@ export default function Landing() {
   const navLinks = [
     { label: "Features", href: "#features" },
     { label: "How It Works", href: "#how-it-works" },
+    { label: "Roles", href: "#roles" },
+    { label: "Pricing", href: "#pricing" },
     { label: "Partners", href: "#partners" },
-    { label: "Testimonials", href: "#testimonials" },
+    { label: "FAQ", href: "#faq" },
   ];
 
   return (
@@ -494,6 +715,198 @@ export default function Landing() {
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* ── ROLE DEEP-DIVE ── */}
+      <div id="roles" className="bg-gray-50 border-y border-gray-200 py-24">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <Badge className="mb-4 bg-blue-50 text-blue-700 border-blue-200 uppercase tracking-widest px-4 py-1 text-xs">
+              Role Breakdown
+            </Badge>
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">What Each Position Does</h2>
+            <p className="text-lg text-gray-500 max-w-2xl mx-auto">
+              Every role in the platform has a clearly defined scope of responsibility. Here is exactly what each level can see, do, and access.
+            </p>
+          </div>
+
+          <div className="space-y-8">
+            {roleSections.map((r, i) => {
+              const Icon = r.icon;
+              return (
+                <Card key={i} className={`border-2 ${r.borderColor} bg-white shadow-sm hover:shadow-lg transition-shadow duration-300`}>
+                  <CardContent className="p-8">
+                    <div className="flex flex-col lg:flex-row gap-8">
+                      <div className="lg:w-72 shrink-0">
+                        <div className="flex items-center gap-4 mb-4">
+                          <div className={`w-14 h-14 ${r.color} rounded-2xl flex items-center justify-center shadow-md`}>
+                            <Icon className="w-7 h-7 text-white" />
+                          </div>
+                          <div>
+                            <h3 className={`text-xl font-black ${r.textColor}`}>{r.role}</h3>
+                            <p className="text-xs text-gray-500 font-medium">{r.tagline}</p>
+                          </div>
+                        </div>
+                        <p className="text-gray-600 text-sm leading-relaxed">{r.description}</p>
+                      </div>
+                      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <p className={`text-xs font-bold uppercase tracking-widest ${r.textColor} mb-3 flex items-center gap-1.5`}>
+                            <CheckCircle className="w-3.5 h-3.5" /> Responsibilities
+                          </p>
+                          <ul className="space-y-2">
+                            {r.responsibilities.map((item, j) => (
+                              <li key={j} className="flex items-start gap-2 text-sm text-gray-700">
+                                <Check className={`w-4 h-4 mt-0.5 shrink-0 ${r.textColor}`} />
+                                {item}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-widest text-red-500 mb-3 flex items-center gap-1.5">
+                            <Lock className="w-3.5 h-3.5" /> Access Restrictions
+                          </p>
+                          <ul className="space-y-2">
+                            {r.cannot.map((item, j) => (
+                              <li key={j} className="flex items-start gap-2 text-sm text-gray-500">
+                                <X className="w-4 h-4 mt-0.5 shrink-0 text-red-400" />
+                                {item}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ── PRICING ── */}
+      <div id="pricing" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
+        <div className="text-center mb-16">
+          <Badge className="mb-4 bg-blue-50 text-blue-700 border-blue-200 uppercase tracking-widest px-4 py-1 text-xs">
+            Pricing
+          </Badge>
+          <h2 className="text-4xl font-bold text-gray-900 mb-4">Simple, Transparent Pricing</h2>
+          <p className="text-lg text-gray-500 max-w-2xl mx-auto">
+            Choose a plan that fits your organization. All plans include a 14-day free trial — no credit card required.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
+          {pricingTiers.map((tier, i) => (
+            <Card
+              key={i}
+              className={`border-2 ${tier.color} relative ${tier.highlight ? "shadow-2xl scale-105" : "shadow-sm"} transition-all duration-300 hover:shadow-xl`}
+            >
+              {tier.highlight && (
+                <div className="absolute -top-4 left-0 right-0 flex justify-center">
+                  <Badge className="bg-blue-600 text-white border-0 px-4 py-1 text-xs font-bold shadow-lg">
+                    <Zap className="w-3 h-3 mr-1" /> Most Popular
+                  </Badge>
+                </div>
+              )}
+              <CardContent className="p-6">
+                <div className="mb-6">
+                  <h3 className="text-lg font-black text-gray-900 mb-1">{tier.name}</h3>
+                  <p className="text-xs text-gray-500 mb-4 leading-snug">{tier.tagline}</p>
+                  <div className="flex items-end gap-1 mb-1">
+                    <span className="text-4xl font-black text-gray-900">{tier.price}</span>
+                    <span className="text-gray-500 text-sm mb-1">{tier.period}</span>
+                  </div>
+                  <p className="text-xs text-gray-400 font-medium">{tier.users}</p>
+                </div>
+
+                <Button
+                  className={`w-full mb-6 font-semibold ${tier.buttonStyle}`}
+                  onClick={() => setShowRegistration(true)}
+                >
+                  {tier.price === "Custom" ? "Contact Us" : "Start Free Trial"}
+                </Button>
+
+                <ul className="space-y-2.5">
+                  {tier.features.map((f, j) => (
+                    <li key={j} className="flex items-start gap-2 text-sm text-gray-600">
+                      <Check className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <div className="mt-12 bg-blue-50 rounded-2xl p-8 text-center border border-blue-100">
+          <PieChart className="w-10 h-10 text-blue-600 mx-auto mb-4" />
+          <h4 className="text-xl font-bold text-gray-900 mb-2">Need a custom arrangement?</h4>
+          <p className="text-gray-500 text-sm mb-5 max-w-xl mx-auto">
+            Government bodies, NGOs, and enterprise organizations with specific compliance or integration requirements can reach out for a tailored package.
+          </p>
+          <Button variant="outline" className="border-blue-600 text-blue-700 hover:bg-blue-100 font-semibold">
+            Contact Our Team
+          </Button>
+        </div>
+      </div>
+
+      {/* ── FAQ ── */}
+      <div id="faq" className="bg-gray-50 border-y border-gray-200 py-24">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <Badge className="mb-4 bg-blue-50 text-blue-700 border-blue-200 uppercase tracking-widest px-4 py-1 text-xs">
+              FAQ
+            </Badge>
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">Frequently Asked Questions</h2>
+            <p className="text-lg text-gray-500 max-w-xl mx-auto">
+              Everything you need to know before bringing THE SUPERVISOR to your organization.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            {faqs.map((faq, i) => (
+              <div
+                key={i}
+                className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+              >
+                <button
+                  className="w-full flex items-center justify-between gap-4 p-6 text-left"
+                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                >
+                  <div className="flex items-start gap-3">
+                    <HelpCircle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+                    <span className="font-semibold text-gray-900 text-sm leading-snug">{faq.q}</span>
+                  </div>
+                  <ChevronDown
+                    className={`w-5 h-5 text-gray-400 shrink-0 transition-transform duration-300 ${openFaq === i ? "rotate-180" : ""}`}
+                  />
+                </button>
+                {openFaq === i && (
+                  <div className="px-6 pb-6 pt-0">
+                    <div className="ml-8 text-gray-600 text-sm leading-relaxed border-t border-gray-100 pt-4">
+                      {faq.a}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-12 text-center">
+            <p className="text-gray-500 text-sm mb-4">Still have questions? We're happy to help.</p>
+            <Button
+              variant="outline"
+              className="border-blue-600 text-blue-700 hover:bg-blue-50 font-semibold"
+              onClick={() => window.location.href = "/login"}
+            >
+              Sign In & Explore the Platform
+            </Button>
+          </div>
         </div>
       </div>
 
