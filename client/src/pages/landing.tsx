@@ -11,6 +11,7 @@ import {
   MapPin, Globe, Check, HelpCircle, Zap, PieChart,
 } from "lucide-react";
 import UserRegistrationModal from "@/components/auth/user-registration-modal";
+import WhatsAppButton from "@/components/whatsapp-button";
 
 /* ─── Contact Form Component ─── */
 function ContactForm() {
@@ -1021,6 +1022,7 @@ export default function Landing() {
       </div>
 
       {showRegistration && <UserRegistrationModal onClose={() => setShowRegistration(false)} />}
+      <WhatsAppButton />
     </>
   );
 }

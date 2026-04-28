@@ -47,3 +47,4 @@ SMTP_PASS = "hcmq uihu lhgb ygxn"
 
 [agent]
 stack = "FULLSTACK_JS"
+expertMode = true

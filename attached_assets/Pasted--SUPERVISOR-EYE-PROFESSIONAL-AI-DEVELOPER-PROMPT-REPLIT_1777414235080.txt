@@ -1,0 +1,278 @@
+# SUPERVISOR EYE — PROFESSIONAL AI DEVELOPER PROMPT (REPLIT)
+
+## CRM ARCHITECTURE + ORGANIZATION ONBOARDING + WHATSAPP INTEGRATION
+
+Develop and integrate the following advanced business and platform-management architecture into **Supervisor Eye**.
+
+---
+
+# PROJECT EXPANSION OBJECTIVE
+
+Supervisor Eye must not only function as a hierarchical reporting and supervision system for client organizations, but must also operate as a **multi-tenant SaaS platform** where we, as the core developers and platform owners, maintain centralized oversight and business control over every organization that registers.
+
+The system must therefore include **two CRM layers**:
+
+---
+
+# LAYER 1 — MASTER PLATFORM CRM (Developer / System Owner CRM)
+
+Design and implement a **centralized Master CRM Dashboard** controlled exclusively by us (the platform developers / Super Admin owners of Supervisor Eye).
+
+## Purpose:
+
+This CRM will allow us to monitor, manage, and control every company, organization, or business that creates an Executive Account on Supervisor Eye.
+
+## Core Functions:
+
+### 1. Organization Registration Monitoring
+
+When any Executive user registers and creates a new organization account:
+
+* Automatically capture:
+
+  * Organization Name
+  * Executive Name
+  * Industry Type
+  * Country / Region
+  * Contact Email
+  * Phone Number
+  * Registration Date
+  * Subscription Plan
+  * Account Status (Active / Trial / Suspended / Pending)
+* Display this information in the Master CRM dashboard.
+
+---
+
+### 2. Client Lifecycle Management
+
+The Master CRM should support:
+
+* Lead tracking
+* Trial organizations
+* Active paying clients
+* Subscription renewals
+* Payment history
+* CRM notes
+* Assigned internal account manager
+* Upgrade / downgrade plans
+* Suspension or deactivation controls
+
+---
+
+### 3. Revenue & Financial Monitoring
+
+The Master CRM must include:
+
+* Monthly recurring revenue (MRR)
+* Active subscriptions
+* Payment alerts
+* Outstanding balances
+* Invoice generation
+* Organization-by-organization revenue analysis
+
+---
+
+### 4. Internal Administrative Controls
+
+Super Admin (us) should be able to:
+
+* Approve or reject new organizations
+* Assign onboarding packages
+* Configure CRM templates
+* Monitor usage statistics
+* See number of users per organization
+* View organization activity logs
+* Push system-wide announcements
+
+---
+
+# LAYER 2 — AUTO-GENERATED ORGANIZATION CRM (Client CRM)
+
+When a new Executive successfully creates an organization:
+
+### Automatically generate a dedicated CRM environment for that organization.
+
+This CRM becomes that client organization’s internal management system.
+
+---
+
+## Auto-Provisioned Features:
+
+### Organizational Dashboard:
+
+* Employee management
+* Department creation
+* Supervisor assignment
+* Sales team management
+* Field officer tracking
+* Internal performance reports
+* Attendance
+* Role hierarchy
+* Internal notifications
+
+---
+
+### CRM Modules:
+
+* Sales tracking
+* Employee reports
+* Task assignment
+* Approval workflows
+* Analytics dashboard
+* Department summaries
+* Performance KPIs
+
+---
+
+### Organizational Hierarchy:
+
+Executive → Managers → Supervisors → Workers
+
+---
+
+### Important:
+
+This organization-specific CRM must be:
+
+* Automatically provisioned upon registration
+* Isolated per organization (multi-tenant architecture)
+* Customizable by subscription plan
+* Controlled by Executive/Admin within that organization
+* Still visible at high-level to us through Master CRM
+
+---
+
+# SYSTEM ARCHITECTURE REQUIREMENT
+
+Implement a **Multi-Tenant SaaS Architecture**:
+
+### Required:
+
+* Master Super Admin Platform
+* Tenant-based Organization Instances
+* Separate organization databases or scoped schemas
+* Tenant provisioning engine
+* Subscription and billing system
+* CRM deployment automation
+
+---
+
+# WHATSAPP DIRECT CONTACT BUTTON (HOMEPAGE)
+
+Add a floating WhatsApp contact button on the homepage.
+
+## Requirements:
+
+* Fixed floating button (bottom-right corner)
+* Professional text:
+
+### “Talk to us directly”
+
+* Opens WhatsApp chat to:
+
+### +256702634715
+
+* WhatsApp link:
+
+### [https://wa.me/256702634715](https://wa.me/256702634715)
+
+* Mobile responsive
+* Visible on all public-facing pages
+* Modern green WhatsApp branding
+* Optional hover animation
+
+---
+
+# UI/UX REQUIREMENTS
+
+## Design Style:
+
+* Corporate
+* Premium SaaS
+* Modern dashboard
+* Clean admin interface
+* Responsive for:
+
+  * Web
+  * Tablet
+  * Mobile
+
+---
+
+# SECURITY REQUIREMENTS
+
+* Role-Based Access Control (RBAC)
+* Multi-tenant isolation
+* JWT authentication
+* Executive onboarding validation
+* Audit logs
+* CRM access boundaries
+* Payment security
+
+---
+
+# DATABASE REQUIREMENTS
+
+Include entities for:
+
+### Master Platform:
+
+* Organizations
+* Executive Accounts
+* Subscription Plans
+* Billing
+* CRM Status
+* Usage Logs
+
+### Tenant CRM:
+
+* Departments
+* Users
+* Reports
+* Tasks
+* Sales
+* Attendance
+* Notifications
+
+---
+
+# FINAL DEVELOPMENT GOAL
+
+Supervisor Eye must function as:
+
+## A. A software product we own and monetize
+
+## B. A platform where organizations register
+
+## C. A CRM provider that auto-generates internal management systems for each client
+
+## D. A scalable SaaS ecosystem
+
+---
+
+# DELIVERABLES REQUIRED FROM REPLIT AI:
+
+1. Updated system architecture
+2. Full database schema
+3. Multi-tenant CRM logic
+4. Master CRM dashboard
+5. Tenant CRM automation
+6. Subscription framework
+7. Homepage WhatsApp integration
+8. UI dashboard layouts
+9. API endpoints
+10. Deployment-ready structure
+
+---
+
+# DEVELOPMENT PRIORITY:
+
+Build this as a real scalable product, not a prototype.
+The architecture must support future expansion into:
+
+* Mobile app
+* Web app
+* Enterprise SaaS
+* Subscription monetization
+
+---
