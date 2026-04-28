@@ -32,8 +32,12 @@ import Timeline from "@/pages/timeline";
 import CompleteProfile from "@/pages/complete-profile";
 import MasterCrm from "@/pages/master-crm";
 import Billing from "@/pages/billing";
+import TeamInvites from "@/pages/team-invites";
+import OrganizationSettings from "@/pages/organization-settings";
+import AcceptInvite from "@/pages/accept-invite";
 import NotFound from "@/pages/not-found";
 import SessionWarning from "@/components/session-warning";
+import TrialBanner from "@/components/trial-banner";
 
 function RoleRedirect() {
   const { user } = useAuth();
@@ -70,6 +74,8 @@ function Router() {
   }
 
   return (
+    <>
+      {isAuthenticated && <TrialBanner />}
     <Switch>
       {/* Auth pages — always accessible */}
       <Route path="/login" component={Login} />
@@ -80,6 +86,9 @@ function Router() {
 
       {/* Public landing */}
       <Route path="/landing" component={Landing} />
+
+      {/* Public invitation accept page */}
+      <Route path="/invite/:token" component={AcceptInvite} />
 
       {isAuthenticated ? (
         <>
@@ -115,6 +124,12 @@ function Router() {
 
           {/* Per-org billing */}
           <Route path="/billing" component={Billing} />
+
+          {/* Team invites */}
+          <Route path="/team-invites" component={TeamInvites} />
+
+          {/* Organization settings */}
+          <Route path="/organization" component={OrganizationSettings} />
         </>
       ) : (
         <Route path="/" component={Landing} />
@@ -122,6 +137,7 @@ function Router() {
 
       <Route component={NotFound} />
     </Switch>
+    </>
   );
 }
 

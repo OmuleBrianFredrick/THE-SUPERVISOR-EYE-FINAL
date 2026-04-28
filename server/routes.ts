@@ -13,6 +13,7 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 import { sendEmail, buildNotificationEmail, buildContactInquiryEmail } from "./email";
+import { randomBytes } from "crypto";
 
 // Middleware: require super admin
 const isSuperAdmin: RequestHandler = async (req: any, res, next) => {
@@ -710,6 +711,236 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ════════════════════════════════════════════════
+  // ORGANIZATION SETTINGS (current user's org)
+  // ════════════════════════════════════════════════
+
+  app.get('/api/organization', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      if (!user?.organizationId) return res.status(404).json({ message: "No organization" });
+      const org = await storage.getOrganization(user.organizationId);
+      res.json(org);
+    } catch (error) {
+      console.error("Error fetching organization:", error);
+      res.status(500).json({ message: "Failed to fetch organization" });
+    }
+  });
+
+  app.patch('/api/organization', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      if (!user?.organizationId) return res.status(404).json({ message: "No organization" });
+      if (user.role !== "executive" && !user.isSuperAdmin) {
+        return res.status(403).json({ message: "Only executives can edit the organization" });
+      }
+      // Whitelist editable fields (not plan/status/dates)
+      const { name, industry, country, contactEmail, phone, notes } = req.body || {};
+      const updates: any = {};
+      if (typeof name === "string" && name.trim()) updates.name = name.trim();
+      if (typeof industry === "string") updates.industry = industry || null;
+      if (typeof country === "string") updates.country = country || null;
+      if (typeof contactEmail === "string") updates.contactEmail = contactEmail || null;
+      if (typeof phone === "string") updates.phone = phone || null;
+      if (typeof notes === "string") updates.notes = notes || null;
+      const updated = await storage.updateOrganization(user.organizationId, updates);
+      await storage.logActivity({
+        organizationId: user.organizationId,
+        userId: user.id,
+        action: "organization_updated",
+        details: `${user.email || user.id} updated organization details`,
+      });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating organization:", error);
+      res.status(500).json({ message: "Failed to update organization" });
+    }
+  });
+
+  app.get('/api/organization/activity', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      if (!user?.organizationId) return res.status(404).json({ message: "No organization" });
+      if (user.role !== "executive" && !user.isSuperAdmin) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      const limit = Math.min(parseInt((req.query.limit as string) || "50", 10), 200);
+      const logs = await storage.getActivityLogs(user.organizationId, limit);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching org activity:", error);
+      res.status(500).json({ message: "Failed to fetch activity" });
+    }
+  });
+
+  // ════════════════════════════════════════════════
+  // INVITATIONS (Executives invite teammates)
+  // ════════════════════════════════════════════════
+
+  app.post('/api/invitations', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      if (!user?.organizationId) return res.status(404).json({ message: "No organization" });
+      if (!["executive", "manager", "supervisor"].includes(user.role) && !user.isSuperAdmin) {
+        return res.status(403).json({ message: "Not allowed to invite" });
+      }
+      const { email, role, supervisorId, department } = req.body || {};
+      if (!email || !email.includes("@")) {
+        return res.status(400).json({ message: "Valid email is required" });
+      }
+      const allowedRoles = ["employee", "supervisor", "manager"];
+      const targetRole = allowedRoles.includes(role) ? role : "employee";
+
+      // Validate supervisor (if provided) belongs to same org
+      let validSupervisorId: string | null = null;
+      if (supervisorId && supervisorId !== "none") {
+        const sup = await storage.getUser(supervisorId);
+        if (sup?.organizationId === user.organizationId) validSupervisorId = supervisorId;
+      }
+
+      const token = randomBytes(24).toString("hex");
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+
+      const inv = await storage.createInvitation({
+        organizationId: user.organizationId,
+        email: email.toLowerCase().trim(),
+        role: targetRole,
+        supervisorId: validSupervisorId,
+        department: department || null,
+        token,
+        status: "pending",
+        invitedById: user.id,
+        expiresAt,
+      });
+
+      await storage.logActivity({
+        organizationId: user.organizationId,
+        userId: user.id,
+        action: "invitation_sent",
+        details: `Invited ${email} as ${targetRole}`,
+      });
+
+      // Try to email the invite (best-effort)
+      try {
+        const baseUrl = process.env.APP_BASE_URL ||
+          (req.headers.origin as string) ||
+          `https://${req.get("host")}`;
+        const link = `${baseUrl}/invite/${token}`;
+        const org = await storage.getOrganization(user.organizationId);
+        await sendEmail({
+          to: email,
+          subject: `You're invited to join ${org?.name || "our team"} on The Supervisor`,
+          html: `
+            <p>Hi,</p>
+            <p>${user.firstName || user.email} invited you to join <b>${org?.name || "their team"}</b> as a <b>${targetRole}</b>.</p>
+            <p><a href="${link}" style="background:#2563eb;color:#fff;padding:12px 18px;border-radius:6px;text-decoration:none;display:inline-block">Accept invitation</a></p>
+            <p style="color:#666;font-size:12px">This link expires in 7 days. If the button doesn't work, paste this URL: ${link}</p>
+          `,
+        });
+      } catch (e) {
+        console.warn("Invite email failed (non-fatal):", e);
+      }
+
+      res.json(inv);
+    } catch (error) {
+      console.error("Error creating invitation:", error);
+      res.status(500).json({ message: "Failed to create invitation" });
+    }
+  });
+
+  app.get('/api/invitations', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      if (!user?.organizationId) return res.status(404).json({ message: "No organization" });
+      const list = await storage.listInvitationsByOrg(user.organizationId);
+      res.json(list);
+    } catch (error) {
+      console.error("Error listing invitations:", error);
+      res.status(500).json({ message: "Failed to list invitations" });
+    }
+  });
+
+  app.delete('/api/invitations/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      if (!user?.organizationId) return res.status(404).json({ message: "No organization" });
+      if (!["executive", "manager", "supervisor"].includes(user.role) && !user.isSuperAdmin) {
+        return res.status(403).json({ message: "Not allowed" });
+      }
+      const id = parseInt(req.params.id, 10);
+      await storage.revokeInvitation(id, user.organizationId);
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Error revoking invitation:", error);
+      res.status(500).json({ message: "Failed to revoke invitation" });
+    }
+  });
+
+  // PUBLIC: fetch invite info by token (used by accept page before login)
+  app.get('/api/invitations/by-token/:token', async (req, res) => {
+    try {
+      const inv = await storage.getInvitationByToken(req.params.token);
+      if (!inv) return res.status(404).json({ message: "Invitation not found" });
+      const expired = new Date(inv.expiresAt) < new Date();
+      const org = await storage.getOrganization(inv.organizationId);
+      res.json({
+        invitation: {
+          id: inv.id,
+          email: inv.email,
+          role: inv.role,
+          status: expired && inv.status === "pending" ? "expired" : inv.status,
+          expiresAt: inv.expiresAt,
+        },
+        organization: org ? { id: org.id, name: org.name, industry: org.industry } : null,
+      });
+    } catch (error) {
+      console.error("Error fetching invite info:", error);
+      res.status(500).json({ message: "Failed to fetch invitation" });
+    }
+  });
+
+  // PUBLIC: accept an invitation — caller must already be logged in (post-register)
+  app.post('/api/invitations/accept/:token', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "User not found" });
+      const inv = await storage.getInvitationByToken(req.params.token);
+      if (!inv) return res.status(404).json({ message: "Invitation not found" });
+      if (inv.status !== "pending") return res.status(400).json({ message: `Invitation is ${inv.status}` });
+      if (new Date(inv.expiresAt) < new Date()) return res.status(400).json({ message: "Invitation expired" });
+
+      // Apply org + role + supervisor to the user
+      await storage.setUserOrganization(user.id, inv.organizationId);
+      await storage.updateUserRole(user.id, inv.role, inv.supervisorId || undefined);
+      if (inv.department) {
+        await storage.updateUserProfile(user.id, { department: inv.department });
+      }
+      await storage.acceptInvitation(req.params.token, user.id);
+
+      await storage.logActivity({
+        organizationId: inv.organizationId,
+        userId: user.id,
+        action: "invitation_accepted",
+        details: `${user.email || user.id} joined as ${inv.role}`,
+      });
+
+      const refreshed = await storage.getUser(user.id);
+      const { password: _, ...safeUser } = (refreshed || user) as any;
+      res.json(safeUser);
+    } catch (error) {
+      console.error("Error accepting invitation:", error);
+      res.status(500).json({ message: "Failed to accept invitation" });
+    }
+  });
+
+  // ════════════════════════════════════════════════
   // BILLING (Per-organization — Executives & owners)
   // ════════════════════════════════════════════════
 
@@ -751,9 +982,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       await storage.logActivity({
         organizationId: user.organizationId,
-        actorEmail: user.email,
+        userId: user.id,
         action: "plan_changed",
-        details: `Plan changed to ${plan}`,
+        details: `${user.email || user.id} changed plan to ${plan}`,
       });
       res.json(updated);
     } catch (error) {

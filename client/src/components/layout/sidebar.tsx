@@ -26,6 +26,8 @@ import {
   Clock,
   Globe,
   CreditCard,
+  Mail,
+  Building,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -81,16 +83,20 @@ export default function Sidebar() {
       ],
       supervisor: [
         { name: "Performance Reviews", href: "/reviews", icon: Star, badge: null },
+        { name: "Team Invites", href: "/team-invites", icon: Mail, badge: null },
       ],
       manager: [
         { name: "Department Overview", href: "/department", icon: PieChart, badge: null },
         { name: "Resource Planning", href: "/resources", icon: Briefcase, badge: null },
+        { name: "Team Invites", href: "/team-invites", icon: Mail, badge: null },
       ],
       executive: [
         { name: "Admin Dashboard", href: "/admin-dashboard", icon: Shield, badge: null },
         { name: "User Management", href: "/admin-users", icon: Users, badge: null },
+        { name: "Team Invites", href: "/team-invites", icon: Mail, badge: null },
+        { name: "Organization", href: "/organization", icon: Building, badge: null },
         { name: "Billing", href: "/billing", icon: CreditCard, badge: null },
-      ]
+      ],
     };
 
     const userRole = user?.role || 'employee';

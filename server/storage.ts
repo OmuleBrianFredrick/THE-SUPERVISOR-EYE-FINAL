@@ -10,6 +10,7 @@ import {
   invoices,
   activityLogs,
   announcements,
+  invitations,
   type User,
   type UpsertUser,
   type InsertReport,
@@ -30,6 +31,8 @@ import {
   type InsertActivityLog,
   type Announcement,
   type InsertAnnouncement,
+  type Invitation,
+  type InsertInvitation,
   type UserWithRelations,
   type ReportWithRelations,
   type TaskWithRelations,
@@ -153,6 +156,13 @@ export interface IStorage {
   // Announcements
   listAnnouncements(orgId?: number): Promise<Announcement[]>;
   createAnnouncement(a: InsertAnnouncement): Promise<Announcement>;
+
+  // Invitations
+  createInvitation(inv: InsertInvitation): Promise<Invitation>;
+  getInvitationByToken(token: string): Promise<Invitation | undefined>;
+  listInvitationsByOrg(orgId: number): Promise<Invitation[]>;
+  revokeInvitation(id: number, orgId: number): Promise<void>;
+  acceptInvitation(token: string, userId: string): Promise<Invitation | undefined>;
 
   // Backfill
   ensureDefaultOrganization(): Promise<Organization>;
@@ -871,6 +881,37 @@ export class DatabaseStorage implements IStorage {
     }
 
     return defaultOrg;
+  }
+
+  // ─── INVITATIONS ───
+  async createInvitation(inv: InsertInvitation): Promise<Invitation> {
+    const [created] = await db.insert(invitations).values(inv).returning();
+    return created;
+  }
+
+  async getInvitationByToken(token: string): Promise<Invitation | undefined> {
+    const [inv] = await db.select().from(invitations).where(eq(invitations.token, token)).limit(1);
+    return inv;
+  }
+
+  async listInvitationsByOrg(orgId: number): Promise<Invitation[]> {
+    return await db.select().from(invitations)
+      .where(eq(invitations.organizationId, orgId))
+      .orderBy(desc(invitations.createdAt));
+  }
+
+  async revokeInvitation(id: number, orgId: number): Promise<void> {
+    await db.update(invitations)
+      .set({ status: "revoked" })
+      .where(and(eq(invitations.id, id), eq(invitations.organizationId, orgId)));
+  }
+
+  async acceptInvitation(token: string, userId: string): Promise<Invitation | undefined> {
+    const [updated] = await db.update(invitations)
+      .set({ status: "accepted", acceptedAt: new Date(), acceptedByUserId: userId })
+      .where(eq(invitations.token, token))
+      .returning();
+    return updated;
   }
 }
 

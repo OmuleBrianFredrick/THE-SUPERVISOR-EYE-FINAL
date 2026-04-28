@@ -274,6 +274,23 @@ export const contacts = pgTable("contacts", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// ─── INVITATIONS (per-org team invites) ───
+export const invitations = pgTable("invitations", {
+  id: serial("id").primaryKey(),
+  organizationId: integer("organization_id").notNull(),
+  email: varchar("email").notNull(),
+  role: varchar("role").notNull().default("employee"),
+  supervisorId: varchar("supervisor_id"),
+  department: varchar("department"),
+  token: varchar("token").notNull().unique(),
+  status: varchar("status").notNull().default("pending"), // pending, accepted, revoked, expired
+  invitedById: varchar("invited_by_id"),
+  expiresAt: timestamp("expires_at").notNull(),
+  acceptedAt: timestamp("accepted_at"),
+  acceptedByUserId: varchar("accepted_by_user_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Insert schemas
 export const insertContactSchema = createInsertSchema(contacts).omit({ id: true, createdAt: true, isRead: true });
 export type InsertContact = z.infer<typeof insertContactSchema>;
@@ -291,6 +308,7 @@ export const insertOrganizationSchema = createInsertSchema(organizations).omit({
 export const insertInvoiceSchema = createInsertSchema(invoices).omit({ id: true, issuedAt: true, paidAt: true });
 export const insertActivityLogSchema = createInsertSchema(activityLogs).omit({ id: true, createdAt: true });
 export const insertAnnouncementSchema = createInsertSchema(announcements).omit({ id: true, createdAt: true });
+export const insertInvitationSchema = createInsertSchema(invitations).omit({ id: true, createdAt: true, acceptedAt: true, acceptedByUserId: true });
 
 // Types
 export type UpsertUser = z.infer<typeof insertUserSchema>;
@@ -313,6 +331,8 @@ export type InsertActivityLog = z.infer<typeof insertActivityLogSchema>;
 export type ActivityLog = typeof activityLogs.$inferSelect;
 export type InsertAnnouncement = z.infer<typeof insertAnnouncementSchema>;
 export type Announcement = typeof announcements.$inferSelect;
+export type InsertInvitation = z.infer<typeof insertInvitationSchema>;
+export type Invitation = typeof invitations.$inferSelect;
 
 // Extended types
 export type UserWithRelations = User & {

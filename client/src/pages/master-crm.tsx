@@ -52,7 +52,7 @@ type Organization = {
 type ActivityItem = {
   id: number;
   organizationId: number | null;
-  actorEmail: string | null;
+  userId: string | null;
   action: string;
   details: string | null;
   createdAt: string;
@@ -361,7 +361,7 @@ export default function MasterCrm() {
                         <div className="flex-1">
                           <p className="text-sm font-medium">
                             {a.action}
-                            {a.actorEmail && <span className="text-gray-500 font-normal"> · {a.actorEmail}</span>}
+                            {a.organizationId && <span className="text-gray-500 font-normal"> · org #{a.organizationId}</span>}
                           </p>
                           {a.details && <p className="text-xs text-gray-500 mt-0.5">{a.details}</p>}
                           <p className="text-xs text-gray-400 mt-0.5">{new Date(a.createdAt).toLocaleString()}</p>
