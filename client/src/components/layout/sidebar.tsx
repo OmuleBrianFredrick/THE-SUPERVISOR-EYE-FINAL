@@ -25,6 +25,7 @@ import {
   ClipboardList,
   Clock,
   Globe,
+  CreditCard,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -88,6 +89,7 @@ export default function Sidebar() {
       executive: [
         { name: "Admin Dashboard", href: "/admin-dashboard", icon: Shield, badge: null },
         { name: "User Management", href: "/admin-users", icon: Users, badge: null },
+        { name: "Billing", href: "/billing", icon: CreditCard, badge: null },
       ]
     };
 

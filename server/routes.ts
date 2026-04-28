@@ -710,6 +710,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ════════════════════════════════════════════════
+  // BILLING (Per-organization — Executives & owners)
+  // ════════════════════════════════════════════════
+
+  app.get('/api/billing', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      if (!user?.organizationId) return res.status(404).json({ message: "No organization" });
+      const org = await storage.getOrganization(user.organizationId);
+      const invoices = await storage.listInvoices(user.organizationId);
+      const plans = [
+        { id: "trial", name: "Trial", priceCents: 0, features: ["14-day trial", "Up to 5 users", "Basic reports"] },
+        { id: "starter", name: "Starter", priceCents: 4900, features: ["Up to 25 users", "All reports", "Email support"] },
+        { id: "professional", name: "Professional", priceCents: 14900, features: ["Up to 100 users", "Analytics", "Priority support"] },
+        { id: "enterprise", name: "Enterprise", priceCents: 49900, features: ["Unlimited users", "Custom integrations", "Dedicated support"] },
+      ];
+      res.json({ organization: org, invoices, plans });
+    } catch (error) {
+      console.error("Error fetching billing:", error);
+      res.status(500).json({ message: "Failed to fetch billing" });
+    }
+  });
+
+  app.post('/api/billing/plan', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      if (!user?.organizationId) return res.status(404).json({ message: "No organization" });
+      if (user.role !== "executive" && !user.isSuperAdmin) {
+        return res.status(403).json({ message: "Only executives can change the plan" });
+      }
+      const { plan } = req.body as { plan: string };
+      const allowed = ["trial", "starter", "professional", "enterprise"];
+      if (!allowed.includes(plan)) return res.status(400).json({ message: "Invalid plan" });
+
+      const updated = await storage.updateOrganization(user.organizationId, {
+        plan,
+        status: plan === "trial" ? "trial" : "active",
+      });
+      await storage.logActivity({
+        organizationId: user.organizationId,
+        actorEmail: user.email,
+        action: "plan_changed",
+        details: `Plan changed to ${plan}`,
+      });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error changing plan:", error);
+      res.status(500).json({ message: "Failed to change plan" });
+    }
+  });
+
+  // ════════════════════════════════════════════════
   // MASTER CRM (Super Admin only — Layer 1)
   // ════════════════════════════════════════════════
 
