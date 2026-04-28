@@ -24,6 +24,7 @@ import {
   Network,
   ClipboardList,
   Clock,
+  Globe,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -93,7 +94,11 @@ export default function Sidebar() {
     const userRole = user?.role || 'employee';
     const specificItems = roleSpecificItems[userRole] || [];
     
-    const allItems = [...commonItems, ...specificItems, 
+    const superAdminItems = (user as any)?.isSuperAdmin
+      ? [{ name: "Master CRM", href: "/master-crm", icon: Globe, badge: null }]
+      : [];
+
+    const allItems = [...superAdminItems, ...commonItems, ...specificItems,
       { name: "Settings", href: "/settings", icon: Settings, badge: null }
     ];
 

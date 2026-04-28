@@ -1,16 +1,35 @@
-import type { Express } from "express";
+import type { Express, RequestHandler } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./auth";
-import { insertReportSchema, insertNotificationSchema, insertGoalSchema, insertTaskSchema, insertContactSchema } from "@shared/schema";
+import {
+  insertReportSchema,
+  insertGoalSchema,
+  insertTaskSchema,
+  insertContactSchema,
+  insertOrganizationSchema,
+  insertInvoiceSchema,
+  insertAnnouncementSchema,
+} from "@shared/schema";
 import { z } from "zod";
 import { sendEmail, buildNotificationEmail, buildContactInquiryEmail } from "./email";
 
+// Middleware: require super admin
+const isSuperAdmin: RequestHandler = async (req: any, res, next) => {
+  const userId = req.session?.userId;
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
+  const user = await storage.getUser(userId);
+  if (!user || !user.isSuperAdmin) {
+    return res.status(403).json({ message: "Super admin access required" });
+  }
+  (req as any).currentUser = user;
+  next();
+};
+
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Auth middleware
   await setupAuth(app);
 
-  // Auth routes
+  // ─── AUTH ───
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
       const userId = (req.session as any).userId;
@@ -24,15 +43,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Complete profile (for Google OAuth new users)
+  // Complete profile (Google OAuth new users)
   app.patch('/api/auth/complete-profile', isAuthenticated, async (req: any, res) => {
     try {
       const userId = (req.session as any).userId;
-      const { firstName, lastName, department, role, supervisorId } = req.body;
-      const updated = await storage.updateUserRole(userId, role || 'employee', supervisorId && supervisorId !== 'none' ? supervisorId : undefined);
-      if (updated) {
-        await storage.updateUserProfile(userId, { firstName, lastName, department });
+      const { firstName, lastName, department, role, supervisorId, organizationName, industry, country, phone } = req.body;
+      const newRole = role || 'employee';
+
+      const current = await storage.getUser(userId);
+      if (!current) return res.status(404).json({ message: "User not found" });
+
+      // Handle org provisioning the same way as registration
+      let organizationId: number | null = current.organizationId ?? null;
+      if (newRole === "executive" && !organizationId) {
+        const orgName = (organizationName && organizationName.trim()) ||
+          `${firstName || current.firstName || "New"} ${lastName || current.lastName || "Executive"}'s Organization`.trim();
+        const trialEnd = new Date();
+        trialEnd.setDate(trialEnd.getDate() + 14);
+        const newOrg = await storage.createOrganization({
+          name: orgName,
+          industry: industry || null,
+          country: country || null,
+          contactEmail: current.email || null,
+          phone: phone || null,
+          plan: "trial",
+          status: "trial",
+          monthlyRateCents: 0,
+          trialEndsAt: trialEnd,
+          ownerExecutiveId: userId,
+          notes: null,
+        });
+        organizationId = newOrg.id;
+        await storage.logActivity({
+          organizationId: newOrg.id,
+          userId,
+          action: "organization_created",
+          details: `Organization "${newOrg.name}" was created via profile completion.`,
+        });
+      } else if (newRole !== "executive" && supervisorId && supervisorId !== "none") {
+        const supervisor = await storage.getUser(supervisorId);
+        if (supervisor?.organizationId) organizationId = supervisor.organizationId;
       }
+
+      await storage.updateUserRole(userId, newRole, supervisorId && supervisorId !== 'none' ? supervisorId : undefined);
+      await storage.updateUserProfile(userId, { firstName, lastName, department });
+      if (organizationId) {
+        await storage.setUserOrganization(userId, organizationId);
+      }
+
       const user = await storage.getUser(userId);
       if (!user) return res.status(404).json({ message: "User not found" });
       const { password: _, ...safeUser } = user as any;
@@ -43,15 +101,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Dashboard stats
+  // ─── DASHBOARD STATS ───
   app.get('/api/dashboard/stats', isAuthenticated, async (req: any, res) => {
     try {
       const userId = (req.session as any).userId;
       const user = await storage.getUser(userId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
+      if (!user) return res.status(404).json({ message: "User not found" });
       const stats = await storage.getDashboardStats(userId, user.role);
       res.json(stats);
     } catch (error) {
@@ -60,28 +115,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Reports routes
+  // ─── REPORTS ───
   app.post('/api/reports', isAuthenticated, async (req: any, res) => {
     try {
       const userId = (req.session as any).userId;
       const user = await storage.getUser(userId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
+      if (!user) return res.status(404).json({ message: "User not found" });
 
       const reportData = insertReportSchema.parse({
         ...req.body,
         employeeId: userId,
         supervisorId: user.supervisorId,
+        organizationId: user.organizationId ?? null,
       });
 
       const report = await storage.createReport(reportData);
 
-      // Create notification for supervisor + send email
       if (user.supervisorId) {
         const notifTitle = 'New Report Submitted';
         const notifMessage = `${user.firstName} ${user.lastName} has submitted a new ${req.body.type} report`;
         await storage.createNotification({
+          organizationId: user.organizationId ?? null,
           userId: user.supervisorId,
           type: 'report_submitted',
           title: notifTitle,
@@ -112,12 +166,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = (req.session as any).userId;
       const user = await storage.getUser(userId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
+      if (!user) return res.status(404).json({ message: "User not found" });
 
       const { status, limit = 20, offset = 0, type, search, dateFrom, dateTo } = req.query;
-      let filters: any = { limit: parseInt(limit as string), offset: parseInt(offset as string) };
+      const filters: any = { limit: parseInt(limit as string), offset: parseInt(offset as string) };
 
       if (status) filters.status = status;
       if (type) filters.type = type;
@@ -125,13 +177,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (dateFrom) filters.dateFrom = new Date(dateFrom as string);
       if (dateTo) filters.dateTo = new Date(dateTo as string);
 
-      // Filter based on role
+      // Tenant scope
+      if (user.organizationId !== null && user.organizationId !== undefined) {
+        filters.organizationId = user.organizationId;
+      }
+
+      // Role scope
       if (user.role === 'employee') {
         filters.employeeId = userId;
-      } else {
-        // Supervisors see reports from their team
+      } else if (user.role === 'supervisor') {
         filters.supervisorId = userId;
       }
+      // managers/executives see all org reports (no extra filter)
 
       const reports = await storage.getReports(filters);
       res.json(reports);
@@ -146,26 +203,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const reportId = parseInt(req.params.id);
       const userId = (req.session as any).userId;
       const user = await storage.getUser(userId);
-      
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
+      if (!user) return res.status(404).json({ message: "User not found" });
 
       const report = await storage.getReport(reportId);
-      if (!report) {
-        return res.status(404).json({ message: "Report not found" });
-      }
+      if (!report) return res.status(404).json({ message: "Report not found" });
 
-      // Check if user has access to this report
-      const hasAccess = report.employeeId === userId || 
-                       report.supervisorId === userId ||
-                       user.role === 'manager' ||
-                       user.role === 'executive';
-
-      if (!hasAccess) {
+      // Tenant boundary
+      if (user.organizationId && report.organizationId && report.organizationId !== user.organizationId && !user.isSuperAdmin) {
         return res.status(403).json({ message: "Access denied" });
       }
 
+      const hasAccess = report.employeeId === userId ||
+                       report.supervisorId === userId ||
+                       user.role === 'manager' ||
+                       user.role === 'executive' ||
+                       user.isSuperAdmin;
+
+      if (!hasAccess) return res.status(403).json({ message: "Access denied" });
       res.json(report);
     } catch (error) {
       console.error("Error fetching report:", error);
@@ -180,23 +234,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { feedback, rating, status } = req.body;
 
       const user = await storage.getUser(userId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
+      if (!user) return res.status(404).json({ message: "User not found" });
 
       const report = await storage.getReport(reportId);
-      if (!report) {
-        return res.status(404).json({ message: "Report not found" });
-      }
+      if (!report) return res.status(404).json({ message: "Report not found" });
 
-      // Check if user is the supervisor for this report
       if (report.supervisorId !== userId) {
         return res.status(403).json({ message: "Only the assigned supervisor can review this report" });
       }
 
       const updatedReport = await storage.reviewReport(reportId, feedback, rating, status);
 
-      // Create notification for employee + send email
       if (report.employeeId) {
         const notificationType = status === 'approved' ? 'report_reviewed' : 'revision_requested';
         const notifTitle = status === 'approved' ? 'Report Approved' : 'Revision Requested';
@@ -205,6 +253,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           : `Your ${report.type} report needs revision. Please review the feedback.`;
 
         await storage.createNotification({
+          organizationId: report.organizationId ?? null,
           userId: report.employeeId,
           type: notificationType,
           title: notifTitle,
@@ -228,14 +277,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Notifications routes
+  // ─── NOTIFICATIONS ───
   app.get('/api/notifications', isAuthenticated, async (req: any, res) => {
     try {
       const userId = (req.session as any).userId;
       const { limit = 10 } = req.query;
-
-      const notifications = await storage.getUserNotifications(userId, parseInt(limit));
-      res.json(notifications);
+      const list = await storage.getUserNotifications(userId, parseInt(limit));
+      res.json(list);
     } catch (error) {
       console.error("Error fetching notifications:", error);
       res.status(500).json({ message: "Failed to fetch notifications" });
@@ -264,7 +312,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Team routes
+  // ─── TEAM ───
   app.get('/api/team', isAuthenticated, async (req: any, res) => {
     try {
       const userId = (req.session as any).userId;
@@ -283,29 +331,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { role, supervisorId } = req.body;
 
       const user = await storage.getUser(userId);
-      if (!user || (user.role !== 'manager' && user.role !== 'executive')) {
+      if (!user || (user.role !== 'manager' && user.role !== 'executive' && !user.isSuperAdmin)) {
         return res.status(403).json({ message: "Insufficient permissions" });
       }
 
-      const updatedUser = await storage.updateUserRole(targetUserId, role, supervisorId);
-      res.json(updatedUser);
+      // Tenant boundary: target user must be in same org (unless super admin)
+      const target = await storage.getUser(targetUserId);
+      if (!target) return res.status(404).json({ message: "User not found" });
+      if (!user.isSuperAdmin && target.organizationId !== user.organizationId) {
+        return res.status(403).json({ message: "Cannot modify users outside your organization" });
+      }
+
+      const updated = await storage.updateUserRole(targetUserId, role, supervisorId);
+      res.json(updated);
     } catch (error) {
       console.error("Error updating user role:", error);
       res.status(500).json({ message: "Failed to update user role" });
     }
   });
 
-  // Admin routes
+  // ─── ADMIN (org-scoped for executives) ───
   app.get('/api/admin/users', isAuthenticated, async (req: any, res) => {
     try {
       const userId = (req.session as any).userId;
       const user = await storage.getUser(userId);
-      
-      if (!user || user.role !== 'executive') {
+      if (!user || (user.role !== 'executive' && !user.isSuperAdmin)) {
         return res.status(403).json({ message: "Executive access required" });
       }
-
-      const allUsers = await storage.getAllUsers();
+      const orgId = user.isSuperAdmin ? undefined : user.organizationId ?? undefined;
+      const allUsers = await storage.getAllUsers(orgId);
       res.json(allUsers);
     } catch (error) {
       console.error("Error fetching all users:", error);
@@ -317,12 +371,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = (req.session as any).userId;
       const user = await storage.getUser(userId);
-      
-      if (!user || user.role !== 'executive') {
+      if (!user || (user.role !== 'executive' && !user.isSuperAdmin)) {
         return res.status(403).json({ message: "Executive access required" });
       }
-
-      const stats = await storage.getSystemStats();
+      const orgId = user.isSuperAdmin ? undefined : user.organizationId ?? undefined;
+      const stats = await storage.getSystemStats(orgId);
       res.json(stats);
     } catch (error) {
       console.error("Error fetching admin stats:", error);
@@ -332,8 +385,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/users/supervisors/:role', isAuthenticated, async (req: any, res) => {
     try {
-      const { role } = req.params;
-      const supervisors = await storage.getSupervisorsForRole(role);
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      const orgId = user?.organizationId ?? undefined;
+      const supervisors = await storage.getSupervisorsForRole(req.params.role, orgId);
       res.json(supervisors);
     } catch (error) {
       console.error("Error fetching supervisors:", error);
@@ -341,15 +396,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Analytics route (manager + executive)
+  // ─── ANALYTICS ───
   app.get('/api/analytics', isAuthenticated, async (req: any, res) => {
     try {
       const userId = (req.session as any).userId;
       const user = await storage.getUser(userId);
-      if (!user || (user.role !== 'manager' && user.role !== 'executive' && user.role !== 'supervisor')) {
+      if (!user || (user.role !== 'manager' && user.role !== 'executive' && user.role !== 'supervisor' && !user.isSuperAdmin)) {
         return res.status(403).json({ message: "Insufficient permissions" });
       }
-      const analytics = await storage.getAnalytics();
+      const orgId = user.isSuperAdmin ? undefined : user.organizationId ?? undefined;
+      const analytics = await storage.getAnalytics(orgId);
       res.json(analytics);
     } catch (error) {
       console.error("Error fetching analytics:", error);
@@ -357,15 +413,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // All users route (for org chart - manager+executive)
+  // All users in org (for org chart)
   app.get('/api/users/all', isAuthenticated, async (req: any, res) => {
     try {
       const userId = (req.session as any).userId;
       const user = await storage.getUser(userId);
-      if (!user || (user.role !== 'manager' && user.role !== 'executive' && user.role !== 'supervisor')) {
+      if (!user || (user.role !== 'manager' && user.role !== 'executive' && user.role !== 'supervisor' && !user.isSuperAdmin)) {
         return res.status(403).json({ message: "Insufficient permissions" });
       }
-      const allUsers = await storage.getAllUsers();
+      const orgId = user.isSuperAdmin ? undefined : user.organizationId ?? undefined;
+      const allUsers = await storage.getAllUsers(orgId);
       res.json(allUsers);
     } catch (error) {
       console.error("Error fetching users:", error);
@@ -373,7 +430,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // User profile update
   app.patch('/api/users/profile', isAuthenticated, async (req: any, res) => {
     try {
       const userId = (req.session as any).userId;
@@ -386,7 +442,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Goals routes
+  // ─── GOALS ───
   app.get('/api/goals', isAuthenticated, async (req: any, res) => {
     try {
       const userId = (req.session as any).userId;
@@ -401,7 +457,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/goals', isAuthenticated, async (req: any, res) => {
     try {
       const userId = (req.session as any).userId;
-      const goalData = insertGoalSchema.parse({ ...req.body, userId });
+      const user = await storage.getUser(userId);
+      const goalData = insertGoalSchema.parse({
+        ...req.body,
+        userId,
+        organizationId: user?.organizationId ?? null,
+      });
       const goal = await storage.createGoal(goalData);
       res.json(goal);
     } catch (error) {
@@ -419,9 +480,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = (req.session as any).userId;
       const userGoals = await storage.getGoals(userId);
       const owns = userGoals.some(g => g.id === goalId);
-      if (!owns) {
-        return res.status(403).json({ message: "Access denied" });
-      }
+      if (!owns) return res.status(403).json({ message: "Access denied" });
       const updated = await storage.updateGoal(goalId, req.body);
       res.json(updated);
     } catch (error) {
@@ -436,9 +495,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = (req.session as any).userId;
       const userGoals = await storage.getGoals(userId);
       const owns = userGoals.some(g => g.id === goalId);
-      if (!owns) {
-        return res.status(403).json({ message: "Access denied" });
-      }
+      if (!owns) return res.status(403).json({ message: "Access denied" });
       await storage.deleteGoal(goalId);
       res.json({ success: true });
     } catch (error) {
@@ -447,20 +504,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Task routes
+  // ─── TASKS ───
   app.get('/api/tasks', isAuthenticated, async (req: any, res) => {
     try {
       const userId = (req.session as any).userId;
       const user = await storage.getUser(userId);
       if (!user) return res.status(404).json({ message: "User not found" });
 
-      let filters: any = {};
-      if (user.role === 'employee') {
-        filters.assignedTo = userId;
-      } else {
-        // supervisors/managers/executives see tasks they assigned
-        filters.assignedBy = userId;
-      }
+      const filters: any = {};
+      if (user.organizationId) filters.organizationId = user.organizationId;
+      if (user.role === 'employee') filters.assignedTo = userId;
+      else filters.assignedBy = userId;
 
       const taskList = await storage.getTasks(filters);
       res.json(taskList);
@@ -477,26 +531,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user) return res.status(404).json({ message: "User not found" });
       if (user.role === 'employee') return res.status(403).json({ message: "Employees cannot assign tasks" });
 
+      // Tenant guard: assignee must be in same org
+      const assignee = await storage.getUser(req.body.assignedTo);
+      if (!assignee) return res.status(404).json({ message: "Assignee not found" });
+      if (user.organizationId && assignee.organizationId !== user.organizationId) {
+        return res.status(403).json({ message: "Cannot assign tasks to users outside your organization" });
+      }
+
       const taskData = insertTaskSchema.parse({
         ...req.body,
         assignedBy: userId,
+        organizationId: user.organizationId ?? null,
         deadline: req.body.deadline ? new Date(req.body.deadline) : undefined,
       });
 
       const task = await storage.createTask(taskData);
 
-      // Notify assigned user + send email
       const taskNotifTitle = 'New Task Assigned';
       const taskNotifMessage = `${user.firstName} ${user.lastName} assigned you a task: "${task.title}"`;
       await storage.createNotification({
+        organizationId: user.organizationId ?? null,
         userId: taskData.assignedTo,
         type: 'task_assigned',
         title: taskNotifTitle,
         message: taskNotifMessage,
         relatedTaskId: task.id,
       });
-      const assignee = await storage.getUser(taskData.assignedTo);
-      if (assignee?.email) {
+      if (assignee.email) {
         await sendEmail({
           to: assignee.email,
           subject: `[The Supervisor] ${taskNotifTitle}`,
@@ -521,18 +582,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const task = await storage.getTask(taskId);
       if (!task) return res.status(404).json({ message: "Task not found" });
 
-      // Employees can only update tasks assigned to them; supervisors can update their own tasks
       if (task.assignedTo !== userId && task.assignedBy !== userId) {
         return res.status(403).json({ message: "Access denied" });
       }
 
       const updated = await storage.updateTask(taskId, req.body);
 
-      // Notify assigner when employee completes a task + send email
       if (req.body.status === 'completed' && task.assignedTo === userId) {
         const completeTitle = 'Task Completed';
         const completeMessage = `A team member completed the task: "${task.title}"`;
         await storage.createNotification({
+          organizationId: task.organizationId ?? null,
           userId: task.assignedBy,
           type: 'task_completed',
           title: completeTitle,
@@ -571,7 +631,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Activity timeline route
+  // ─── TIMELINE ───
   app.get('/api/timeline', isAuthenticated, async (req: any, res) => {
     try {
       const userId = (req.session as any).userId;
@@ -585,7 +645,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ── CONTACT INQUIRY (public — no auth required) ──
+  // ─── CONTACT (public) ───
   app.post('/api/contact', async (req, res) => {
     try {
       const parsed = insertContactSchema.safeParse(req.body);
@@ -593,7 +653,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid form data", errors: parsed.error.flatten() });
       }
       const contact = await storage.saveContact(parsed.data);
-      // Send email notification to platform owner
       const ownerEmail = process.env.CONTACT_RECIPIENT || "omulebrianfredrick@gmail.com";
       await sendEmail({
         to: ownerEmail,
@@ -607,12 +666,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ── GET ALL CONTACTS (exec only) ──
   app.get('/api/contacts', isAuthenticated, async (req: any, res) => {
     try {
       const userId = (req.session as any).userId;
       const user = await storage.getUser(userId);
-      if (!user || user.role !== "executive") {
+      if (!user || (user.role !== "executive" && !user.isSuperAdmin)) {
         return res.status(403).json({ message: "Executives only" });
       }
       const allContacts = await storage.getContacts();
@@ -623,18 +681,210 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ── MARK CONTACT READ (exec only) ──
   app.patch('/api/contacts/:id/read', isAuthenticated, async (req: any, res) => {
     try {
       const userId = (req.session as any).userId;
       const user = await storage.getUser(userId);
-      if (!user || user.role !== "executive") {
+      if (!user || (user.role !== "executive" && !user.isSuperAdmin)) {
         return res.status(403).json({ message: "Executives only" });
       }
       await storage.markContactRead(parseInt(req.params.id));
       res.json({ message: "Marked as read" });
     } catch (error) {
       res.status(500).json({ message: "Failed to mark as read" });
+    }
+  });
+
+  // ─── ANNOUNCEMENTS (visible to all authed users) ───
+  app.get('/api/announcements', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      const orgId = user?.organizationId ?? undefined;
+      const list = await storage.listAnnouncements(orgId);
+      res.json(list);
+    } catch (error) {
+      console.error("Error fetching announcements:", error);
+      res.status(500).json({ message: "Failed to fetch announcements" });
+    }
+  });
+
+  // ════════════════════════════════════════════════
+  // MASTER CRM (Super Admin only — Layer 1)
+  // ════════════════════════════════════════════════
+
+  app.get('/api/master/stats', isSuperAdmin, async (_req, res) => {
+    try {
+      const stats = await storage.getMasterStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching master stats:", error);
+      res.status(500).json({ message: "Failed to fetch master stats" });
+    }
+  });
+
+  app.get('/api/master/organizations', isSuperAdmin, async (_req, res) => {
+    try {
+      const orgs = await storage.listOrganizations();
+      res.json(orgs);
+    } catch (error) {
+      console.error("Error listing organizations:", error);
+      res.status(500).json({ message: "Failed to list organizations" });
+    }
+  });
+
+  app.get('/api/master/organizations/:id', isSuperAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const org = await storage.getOrganization(id);
+      if (!org) return res.status(404).json({ message: "Organization not found" });
+      const users = await storage.getAllUsers(id);
+      const invoiceList = await storage.listInvoices(id);
+      const activity = await storage.getActivityLogs(id, 50);
+      res.json({ organization: org, users, invoices: invoiceList, activity });
+    } catch (error) {
+      console.error("Error fetching organization detail:", error);
+      res.status(500).json({ message: "Failed to fetch organization" });
+    }
+  });
+
+  app.post('/api/master/organizations', isSuperAdmin, async (req: any, res) => {
+    try {
+      const data = insertOrganizationSchema.parse(req.body);
+      const org = await storage.createOrganization(data);
+      await storage.logActivity({
+        organizationId: org.id,
+        userId: req.currentUser.id,
+        action: "organization_created_by_admin",
+        details: `Super admin created organization "${org.name}"`,
+      });
+      res.json(org);
+    } catch (error) {
+      console.error("Error creating organization:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create organization" });
+    }
+  });
+
+  app.patch('/api/master/organizations/:id', isSuperAdmin, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updates = req.body;
+      // coerce date fields
+      if (updates.trialEndsAt) updates.trialEndsAt = new Date(updates.trialEndsAt);
+      if (updates.suspendedAt) updates.suspendedAt = new Date(updates.suspendedAt);
+      const updated = await storage.updateOrganization(id, updates);
+      await storage.logActivity({
+        organizationId: id,
+        userId: req.currentUser.id,
+        action: "organization_updated",
+        details: `Updated fields: ${Object.keys(updates).join(", ")}`,
+      });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating organization:", error);
+      res.status(500).json({ message: "Failed to update organization" });
+    }
+  });
+
+  app.post('/api/master/organizations/:id/status', isSuperAdmin, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { status } = req.body;
+      if (!["active", "trial", "suspended", "pending"].includes(status)) {
+        return res.status(400).json({ message: "Invalid status" });
+      }
+      const updates: any = { status };
+      if (status === "suspended") updates.suspendedAt = new Date();
+      const updated = await storage.updateOrganization(id, updates);
+      await storage.logActivity({
+        organizationId: id,
+        userId: req.currentUser.id,
+        action: `status_changed_to_${status}`,
+        details: `Organization status changed to ${status}`,
+      });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error changing status:", error);
+      res.status(500).json({ message: "Failed to change status" });
+    }
+  });
+
+  app.delete('/api/master/organizations/:id', isSuperAdmin, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteOrganization(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting organization:", error);
+      res.status(500).json({ message: "Failed to delete organization" });
+    }
+  });
+
+  app.get('/api/master/invoices', isSuperAdmin, async (req, res) => {
+    try {
+      const orgId = req.query.orgId ? parseInt(req.query.orgId as string) : undefined;
+      const invoiceList = await storage.listInvoices(orgId);
+      res.json(invoiceList);
+    } catch (error) {
+      console.error("Error listing invoices:", error);
+      res.status(500).json({ message: "Failed to list invoices" });
+    }
+  });
+
+  app.post('/api/master/invoices', isSuperAdmin, async (req, res) => {
+    try {
+      const body = { ...req.body };
+      if (body.dueDate) body.dueDate = new Date(body.dueDate);
+      const data = insertInvoiceSchema.parse(body);
+      const invoice = await storage.createInvoice(data);
+      res.json(invoice);
+    } catch (error) {
+      console.error("Error creating invoice:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create invoice" });
+    }
+  });
+
+  app.patch('/api/master/invoices/:id/status', isSuperAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { status } = req.body;
+      const updated = await storage.updateInvoiceStatus(id, status);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating invoice status:", error);
+      res.status(500).json({ message: "Failed to update invoice status" });
+    }
+  });
+
+  app.get('/api/master/activity', isSuperAdmin, async (req, res) => {
+    try {
+      const orgId = req.query.orgId ? parseInt(req.query.orgId as string) : undefined;
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
+      const list = await storage.getActivityLogs(orgId, limit);
+      res.json(list);
+    } catch (error) {
+      console.error("Error fetching activity logs:", error);
+      res.status(500).json({ message: "Failed to fetch activity logs" });
+    }
+  });
+
+  app.post('/api/master/announcements', isSuperAdmin, async (req: any, res) => {
+    try {
+      const data = insertAnnouncementSchema.parse({ ...req.body, createdBy: req.currentUser.id });
+      const a = await storage.createAnnouncement(data);
+      res.json(a);
+    } catch (error) {
+      console.error("Error creating announcement:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create announcement" });
     }
   });
 

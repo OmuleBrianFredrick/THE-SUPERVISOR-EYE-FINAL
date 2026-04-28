@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { storage } from "./storage";
 
 const app = express();
 app.use(express.json());
@@ -38,6 +39,14 @@ app.use((req, res, next) => {
 
 (async () => {
   const server = await registerRoutes(app);
+
+  // Multi-tenant backfill: ensure default org exists and orphan rows are linked
+  try {
+    const defaultOrg = await storage.ensureDefaultOrganization();
+    log(`Multi-tenant ready. Default org: "${defaultOrg.name}" (id=${defaultOrg.id})`);
+  } catch (e) {
+    console.error("Backfill error (continuing):", e);
+  }
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

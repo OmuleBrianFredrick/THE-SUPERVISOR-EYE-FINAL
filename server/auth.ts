@@ -35,7 +35,7 @@ export async function setupAuth(app: Express) {
   // Register new user
   app.post("/api/auth/register", async (req, res) => {
     try {
-      const { email, password, firstName, lastName, role, department, supervisorId } = req.body;
+      const { email, password, firstName, lastName, role, department, supervisorId, organizationName, industry, country, phone } = req.body;
 
       if (!email || !password) {
         return res.status(400).json({ message: "Email and password are required" });
@@ -51,6 +51,46 @@ export async function setupAuth(app: Express) {
 
       const hashedPassword = await bcrypt.hash(password, 12);
       const userId = crypto.randomUUID();
+      const userRole = role || "employee";
+
+      // Determine organization context
+      let organizationId: number | null = null;
+
+      if (userRole === "executive") {
+        // Auto-provision a new organization for this executive
+        const orgName = (organizationName && organizationName.trim()) ||
+          `${firstName || "New"} ${lastName || "Executive"}'s Organization`.trim();
+        const trialEnd = new Date();
+        trialEnd.setDate(trialEnd.getDate() + 14);
+
+        const newOrg = await storage.createOrganization({
+          name: orgName,
+          industry: industry || null,
+          country: country || null,
+          contactEmail: email,
+          phone: phone || null,
+          plan: "trial",
+          status: "trial",
+          monthlyRateCents: 0,
+          trialEndsAt: trialEnd,
+          ownerExecutiveId: userId,
+          notes: null,
+        });
+        organizationId = newOrg.id;
+
+        await storage.logActivity({
+          organizationId: newOrg.id,
+          userId,
+          action: "organization_created",
+          details: `Organization "${newOrg.name}" was created via executive registration.`,
+        });
+      } else if (supervisorId) {
+        // Inherit org from supervisor
+        const supervisor = await storage.getUser(supervisorId);
+        if (supervisor?.organizationId) {
+          organizationId = supervisor.organizationId;
+        }
+      }
 
       const user = await storage.upsertUser({
         id: userId,
@@ -58,11 +98,24 @@ export async function setupAuth(app: Express) {
         password: hashedPassword,
         firstName: firstName || null,
         lastName: lastName || null,
-        role: role || "employee",
+        role: userRole,
         department: department || null,
         supervisorId: supervisorId || null,
+        organizationId,
+        isSuperAdmin: false,
         isActive: true,
       });
+
+      // If executive just created an org, also persist owner link (already set, but ensure org is updated if user id changed)
+      if (userRole === "executive" && organizationId) {
+        await storage.updateOrganization(organizationId, { ownerExecutiveId: user.id });
+      }
+
+      // Promote to super admin if email matches SUPERADMIN_EMAIL
+      if (process.env.SUPERADMIN_EMAIL && email === process.env.SUPERADMIN_EMAIL) {
+        await storage.setSuperAdmin(user.id, true);
+        user.isSuperAdmin = true;
+      }
 
       (req.session as any).userId = user.id;
 

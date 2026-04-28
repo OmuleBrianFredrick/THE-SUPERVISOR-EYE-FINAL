@@ -30,6 +30,7 @@ import ResetPassword from "@/pages/reset-password";
 import Tasks from "@/pages/tasks";
 import Timeline from "@/pages/timeline";
 import CompleteProfile from "@/pages/complete-profile";
+import MasterCrm from "@/pages/master-crm";
 import NotFound from "@/pages/not-found";
 import SessionWarning from "@/components/session-warning";
 
@@ -107,6 +108,9 @@ function Router() {
           <Route path="/settings" component={Settings} />
           <Route path="/analytics" component={Analytics} />
           <Route path="/org-chart" component={OrgChart} />
+
+          {/* Master CRM (super-admin only — gating enforced by API) */}
+          <Route path="/master-crm" component={MasterCrm} />
         </>
       ) : (
         <Route path="/" component={Landing} />

@@ -25,6 +25,26 @@ export const sessions = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
+// ─── ORGANIZATIONS (multi-tenant root) ───
+export const organizations = pgTable("organizations", {
+  id: serial("id").primaryKey(),
+  name: varchar("name").notNull(),
+  industry: varchar("industry"),
+  country: varchar("country"),
+  contactEmail: varchar("contact_email"),
+  phone: varchar("phone"),
+  plan: varchar("plan").default("trial"), // trial, starter, professional, enterprise
+  status: varchar("status").default("active"), // active, trial, suspended, pending
+  monthlyRateCents: integer("monthly_rate_cents").default(0),
+  trialEndsAt: timestamp("trial_ends_at"),
+  suspendedAt: timestamp("suspended_at"),
+  ownerExecutiveId: varchar("owner_executive_id"),
+  accountManagerId: varchar("account_manager_id"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Users table.
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().notNull(),
@@ -36,6 +56,8 @@ export const users = pgTable("users", {
   role: varchar("role").notNull().default("employee"),
   supervisorId: varchar("supervisor_id"),
   department: varchar("department"),
+  organizationId: integer("organization_id"),
+  isSuperAdmin: boolean("is_super_admin").default(false),
   isActive: boolean("is_active").default(true),
   resetToken: varchar("reset_token"),
   resetTokenExpiry: timestamp("reset_token_expiry"),
@@ -45,6 +67,7 @@ export const users = pgTable("users", {
 
 export const reports = pgTable("reports", {
   id: serial("id").primaryKey(),
+  organizationId: integer("organization_id"),
   employeeId: varchar("employee_id").notNull(),
   supervisorId: varchar("supervisor_id"),
   type: varchar("type").notNull(),
@@ -67,6 +90,7 @@ export const reports = pgTable("reports", {
 
 export const notifications = pgTable("notifications", {
   id: serial("id").primaryKey(),
+  organizationId: integer("organization_id"),
   userId: varchar("user_id").notNull(),
   type: varchar("type").notNull(),
   title: varchar("title").notNull(),
@@ -79,6 +103,7 @@ export const notifications = pgTable("notifications", {
 
 export const goals = pgTable("goals", {
   id: serial("id").primaryKey(),
+  organizationId: integer("organization_id"),
   userId: varchar("user_id").notNull(),
   title: varchar("title").notNull(),
   description: text("description"),
@@ -90,6 +115,7 @@ export const goals = pgTable("goals", {
 
 export const performanceMetrics = pgTable("performance_metrics", {
   id: serial("id").primaryKey(),
+  organizationId: integer("organization_id"),
   employeeId: varchar("employee_id").notNull(),
   period: varchar("period").notNull(),
   totalReports: integer("total_reports").default(0),
@@ -100,9 +126,10 @@ export const performanceMetrics = pgTable("performance_metrics", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// NEW: Task assignment table
+// Task assignment table
 export const tasks = pgTable("tasks", {
   id: serial("id").primaryKey(),
+  organizationId: integer("organization_id"),
   title: varchar("title").notNull(),
   description: text("description"),
   assignedTo: varchar("assigned_to").notNull(),
@@ -114,7 +141,54 @@ export const tasks = pgTable("tasks", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// ─── PLATFORM CRM TABLES ───
+export const invoices = pgTable("invoices", {
+  id: serial("id").primaryKey(),
+  organizationId: integer("organization_id").notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  status: varchar("status").default("pending"), // pending, paid, overdue, cancelled
+  description: text("description"),
+  issuedAt: timestamp("issued_at").defaultNow(),
+  paidAt: timestamp("paid_at"),
+  dueDate: timestamp("due_date"),
+});
+
+export const activityLogs = pgTable("activity_logs", {
+  id: serial("id").primaryKey(),
+  organizationId: integer("organization_id"),
+  userId: varchar("user_id"),
+  action: varchar("action").notNull(),
+  details: text("details"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const announcements = pgTable("announcements", {
+  id: serial("id").primaryKey(),
+  title: varchar("title").notNull(),
+  message: text("message").notNull(),
+  audience: varchar("audience").default("all"), // all, executives, single_org
+  organizationId: integer("organization_id"), // when audience=single_org
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Relations
+export const organizationRelations = relations(organizations, ({ many, one }) => ({
+  members: many(users),
+  reports: many(reports),
+  invoices: many(invoices),
+  ownerExecutive: one(users, {
+    fields: [organizations.ownerExecutiveId],
+    references: [users.id],
+    relationName: "org_owner",
+  }),
+  accountManager: one(users, {
+    fields: [organizations.accountManagerId],
+    references: [users.id],
+    relationName: "org_account_manager",
+  }),
+}));
+
 export const goalRelations = relations(goals, ({ one }) => ({
   user: one(users, { fields: [goals.userId], references: [users.id] }),
 }));
@@ -145,6 +219,10 @@ export const userRelations = relations(users, ({ one, many }) => ({
   metrics: many(performanceMetrics),
   assignedTasks: many(tasks, { relationName: "task_assignee" }),
   createdTasks: many(tasks, { relationName: "task_assigner" }),
+  organization: one(organizations, {
+    fields: [users.organizationId],
+    references: [organizations.id],
+  }),
 }));
 
 export const reportRelations = relations(reports, ({ one }) => ({
@@ -167,6 +245,21 @@ export const notificationRelations = relations(notifications, ({ one }) => ({
 
 export const performanceMetricsRelations = relations(performanceMetrics, ({ one }) => ({
   employee: one(users, { fields: [performanceMetrics.employeeId], references: [users.id] }),
+}));
+
+export const invoiceRelations = relations(invoices, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [invoices.organizationId],
+    references: [organizations.id],
+  }),
+}));
+
+export const activityLogRelations = relations(activityLogs, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [activityLogs.organizationId],
+    references: [organizations.id],
+  }),
+  user: one(users, { fields: [activityLogs.userId], references: [users.id] }),
 }));
 
 // Contact inquiries table
@@ -194,6 +287,10 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
 export const insertPerformanceMetricsSchema = createInsertSchema(performanceMetrics).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertGoalSchema = createInsertSchema(goals).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertTaskSchema = createInsertSchema(tasks).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertOrganizationSchema = createInsertSchema(organizations).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertInvoiceSchema = createInsertSchema(invoices).omit({ id: true, issuedAt: true, paidAt: true });
+export const insertActivityLogSchema = createInsertSchema(activityLogs).omit({ id: true, createdAt: true });
+export const insertAnnouncementSchema = createInsertSchema(announcements).omit({ id: true, createdAt: true });
 
 // Types
 export type UpsertUser = z.infer<typeof insertUserSchema>;
@@ -208,6 +305,14 @@ export type InsertGoal = z.infer<typeof insertGoalSchema>;
 export type Goal = typeof goals.$inferSelect;
 export type InsertTask = z.infer<typeof insertTaskSchema>;
 export type Task = typeof tasks.$inferSelect;
+export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
+export type Organization = typeof organizations.$inferSelect;
+export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+export type Invoice = typeof invoices.$inferSelect;
+export type InsertActivityLog = z.infer<typeof insertActivityLogSchema>;
+export type ActivityLog = typeof activityLogs.$inferSelect;
+export type InsertAnnouncement = z.infer<typeof insertAnnouncementSchema>;
+export type Announcement = typeof announcements.$inferSelect;
 
 // Extended types
 export type UserWithRelations = User & {
@@ -215,6 +320,7 @@ export type UserWithRelations = User & {
   subordinates?: User[];
   reports?: Report[];
   supervisedReports?: Report[];
+  organization?: Organization;
 };
 
 export type ReportWithRelations = Report & {
@@ -225,4 +331,11 @@ export type ReportWithRelations = Report & {
 export type TaskWithRelations = Task & {
   assignee?: User;
   assigner?: User;
+};
+
+export type OrganizationWithStats = Organization & {
+  userCount: number;
+  reportCount: number;
+  ownerExecutive?: User;
+  accountManager?: User;
 };
