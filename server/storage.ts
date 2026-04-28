@@ -5,6 +5,7 @@ import {
   performanceMetrics,
   goals,
   tasks,
+  contacts,
   type User,
   type UpsertUser,
   type InsertReport,
@@ -15,6 +16,8 @@ import {
   type Goal,
   type InsertTask,
   type Task,
+  type InsertContact,
+  type Contact,
   type UserWithRelations,
   type ReportWithRelations,
   type TaskWithRelations,
@@ -107,6 +110,11 @@ export interface IStorage {
 
   // Activity timeline
   getActivityTimeline(userId: string, role: string): Promise<any[]>;
+
+  // Contact inquiries
+  saveContact(contact: InsertContact): Promise<Contact>;
+  getContacts(): Promise<Contact[]>;
+  markContactRead(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -597,6 +605,19 @@ export class DatabaseStorage implements IStorage {
     activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
     return activities.slice(0, 50);
+  }
+
+  async saveContact(contact: InsertContact): Promise<Contact> {
+    const [saved] = await db.insert(contacts).values(contact).returning();
+    return saved;
+  }
+
+  async getContacts(): Promise<Contact[]> {
+    return await db.select().from(contacts).orderBy(desc(contacts.createdAt));
+  }
+
+  async markContactRead(id: number): Promise<void> {
+    await db.update(contacts).set({ isRead: true }).where(eq(contacts.id, id));
   }
 }
 

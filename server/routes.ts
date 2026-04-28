@@ -2,9 +2,9 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./auth";
-import { insertReportSchema, insertNotificationSchema, insertGoalSchema, insertTaskSchema } from "@shared/schema";
+import { insertReportSchema, insertNotificationSchema, insertGoalSchema, insertTaskSchema, insertContactSchema } from "@shared/schema";
 import { z } from "zod";
-import { sendEmail, buildNotificationEmail } from "./email";
+import { sendEmail, buildNotificationEmail, buildContactInquiryEmail } from "./email";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -582,6 +582,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching timeline:", error);
       res.status(500).json({ message: "Failed to fetch timeline" });
+    }
+  });
+
+  // ── CONTACT INQUIRY (public — no auth required) ──
+  app.post('/api/contact', async (req, res) => {
+    try {
+      const parsed = insertContactSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid form data", errors: parsed.error.flatten() });
+      }
+      const contact = await storage.saveContact(parsed.data);
+      // Send email notification to platform owner
+      const ownerEmail = process.env.CONTACT_RECIPIENT || "omulebrianfredrick@gmail.com";
+      await sendEmail({
+        to: ownerEmail,
+        subject: `New Inquiry from ${contact.name} — THE SUPERVISOR`,
+        html: buildContactInquiryEmail(parsed.data),
+      });
+      res.json({ message: "Inquiry received successfully" });
+    } catch (error) {
+      console.error("Contact form error:", error);
+      res.status(500).json({ message: "Failed to submit inquiry" });
+    }
+  });
+
+  // ── GET ALL CONTACTS (exec only) ──
+  app.get('/api/contacts', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      if (!user || user.role !== "executive") {
+        return res.status(403).json({ message: "Executives only" });
+      }
+      const allContacts = await storage.getContacts();
+      res.json(allContacts);
+    } catch (error) {
+      console.error("Error fetching contacts:", error);
+      res.status(500).json({ message: "Failed to fetch contacts" });
+    }
+  });
+
+  // ── MARK CONTACT READ (exec only) ──
+  app.patch('/api/contacts/:id/read', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      if (!user || user.role !== "executive") {
+        return res.status(403).json({ message: "Executives only" });
+      }
+      await storage.markContactRead(parseInt(req.params.id));
+      res.json({ message: "Marked as read" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to mark as read" });
     }
   });
 

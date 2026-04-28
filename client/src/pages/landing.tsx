@@ -12,6 +12,109 @@ import {
 } from "lucide-react";
 import UserRegistrationModal from "@/components/auth/user-registration-modal";
 
+/* ─── Contact Form Component ─── */
+function ContactForm() {
+  const [form, setForm] = useState({ name: "", email: "", organization: "", phone: "", message: "" });
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name || !form.email || !form.message) return;
+    setStatus("sending");
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (res.ok) {
+        setStatus("sent");
+        setForm({ name: "", email: "", organization: "", phone: "", message: "" });
+      } else {
+        setStatus("error");
+      }
+    } catch {
+      setStatus("error");
+    }
+  };
+
+  if (status === "sent") {
+    return (
+      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-12 text-center">
+        <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+          <CheckCircle className="w-8 h-8 text-emerald-400" />
+        </div>
+        <h3 className="text-xl font-bold text-white mb-2">Inquiry Received!</h3>
+        <p className="text-slate-400 text-sm">Thank you for reaching out. We'll get back to you within one business day.</p>
+        <button onClick={() => setStatus("idle")} className="mt-6 text-sm text-blue-400 hover:text-blue-300 underline">
+          Send another message
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="bg-white/[0.03] border border-white/8 rounded-2xl p-8 md:p-10">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+        <div>
+          <label className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Full Name *</label>
+          <input
+            type="text" required value={form.name}
+            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+            placeholder="John Doe"
+            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-600 text-sm focus:outline-none focus:border-blue-500/50 focus:bg-white/8 transition-all duration-200"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Email Address *</label>
+          <input
+            type="email" required value={form.email}
+            onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+            placeholder="john@company.com"
+            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-600 text-sm focus:outline-none focus:border-blue-500/50 focus:bg-white/8 transition-all duration-200"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Organization</label>
+          <input
+            type="text" value={form.organization}
+            onChange={e => setForm(f => ({ ...f, organization: e.target.value }))}
+            placeholder="Company or Organization name"
+            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-600 text-sm focus:outline-none focus:border-blue-500/50 focus:bg-white/8 transition-all duration-200"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Phone (optional)</label>
+          <input
+            type="tel" value={form.phone}
+            onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+            placeholder="+1 234 567 8900"
+            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-600 text-sm focus:outline-none focus:border-blue-500/50 focus:bg-white/8 transition-all duration-200"
+          />
+        </div>
+      </div>
+      <div className="mb-6">
+        <label className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Message *</label>
+        <textarea
+          required value={form.message} rows={5}
+          onChange={e => setForm(f => ({ ...f, message: e.target.value }))}
+          placeholder="Tell us about your organization, team size, and what you're looking to achieve..."
+          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-600 text-sm focus:outline-none focus:border-blue-500/50 focus:bg-white/8 transition-all duration-200 resize-none"
+        />
+      </div>
+      {status === "error" && (
+        <p className="text-red-400 text-sm mb-4">Something went wrong. Please try again or email us directly.</p>
+      )}
+      <Button type="submit" disabled={status === "sending"}
+        className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 h-auto text-base shadow-xl shadow-blue-500/20 hover:scale-[1.01] transition-all duration-300 disabled:opacity-60">
+        {status === "sending" ? "Sending..." : "Send Inquiry"}
+        <ArrowRight className="ml-2 w-5 h-5" />
+      </Button>
+      <p className="text-center text-slate-600 text-xs mt-4">We typically respond within one business day.</p>
+    </form>
+  );
+}
+
 /* ─── Scroll-reveal hook ─── */
 function useReveal(threshold = 0.15) {
   const ref = useRef<HTMLDivElement>(null);
@@ -195,6 +298,7 @@ export default function Landing() {
     { label: "Pricing", href: "#pricing" },
     { label: "Partners", href: "#partners" },
     { label: "FAQ", href: "#faq" },
+    { label: "Contact", href: "#contact" },
   ];
 
   const handleRoleBasedLogin = (role: string) => {
@@ -843,6 +947,23 @@ export default function Landing() {
               );
             })}
           </div>
+        </div>
+
+        {/* ── CONTACT FORM ── */}
+        <div id="contact" className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-28">
+          <Reveal className="text-center mb-14">
+            <Badge className="mb-4 bg-blue-500/10 text-blue-400 border-blue-500/20 uppercase tracking-widest px-4 py-1 text-xs">
+              Get in Touch
+            </Badge>
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">Contact Us</h2>
+            <p className="text-lg text-slate-400 max-w-xl mx-auto">
+              Interested in bringing THE SUPERVISOR to your organization? Fill out the form and we'll be in touch within one business day.
+            </p>
+          </Reveal>
+
+          <Reveal direction="up" delay={100}>
+            <ContactForm />
+          </Reveal>
         </div>
 
         {/* ── FOOTER CTA ── */}

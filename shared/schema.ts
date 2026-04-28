@@ -169,7 +169,23 @@ export const performanceMetricsRelations = relations(performanceMetrics, ({ one 
   employee: one(users, { fields: [performanceMetrics.employeeId], references: [users.id] }),
 }));
 
+// Contact inquiries table
+export const contacts = pgTable("contacts", {
+  id: serial("id").primaryKey(),
+  name: varchar("name").notNull(),
+  email: varchar("email").notNull(),
+  organization: varchar("organization"),
+  phone: varchar("phone"),
+  message: text("message").notNull(),
+  isRead: boolean("is_read").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Insert schemas
+export const insertContactSchema = createInsertSchema(contacts).omit({ id: true, createdAt: true, isRead: true });
+export type InsertContact = z.infer<typeof insertContactSchema>;
+export type Contact = typeof contacts.$inferSelect;
+
 export const insertUserSchema = createInsertSchema(users).omit({ createdAt: true, updatedAt: true });
 export const insertReportSchema = createInsertSchema(reports).omit({
   id: true, createdAt: true, updatedAt: true, submittedAt: true, reviewedAt: true,

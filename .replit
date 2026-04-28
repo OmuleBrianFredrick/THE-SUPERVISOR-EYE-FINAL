@@ -34,3 +34,12 @@ author = "agent"
 task = "shell.exec"
 args = "npm run dev"
 waitForPort = 5000
+
+[userenv]
+
+[userenv.shared]
+SMTP_HOST = "smtp.gmail.com"
+SMTP_PORT = "587"
+SMTP_USER = "omulebrianfredrick@gmail.com"
+SMTP_FROM = "omulebrianfredrick@gmail.com"
+CONTACT_RECIPIENT = "omulebrianfredrick@gmail.com"
