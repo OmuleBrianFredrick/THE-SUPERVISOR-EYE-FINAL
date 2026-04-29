@@ -35,11 +35,18 @@ export const organizations = pgTable("organizations", {
   phone: varchar("phone"),
   plan: varchar("plan").default("trial"), // trial, starter, professional, enterprise
   status: varchar("status").default("active"), // active, trial, suspended, pending
+  billingPeriod: varchar("billing_period").default("monthly"), // monthly | annual
   monthlyRateCents: integer("monthly_rate_cents").default(0),
   trialEndsAt: timestamp("trial_ends_at"),
   suspendedAt: timestamp("suspended_at"),
   ownerExecutiveId: varchar("owner_executive_id"),
   accountManagerId: varchar("account_manager_id"),
+  stripeCustomerId: varchar("stripe_customer_id"),
+  stripeSubscriptionId: varchar("stripe_subscription_id"),
+  brandLogoUrl: text("brand_logo_url"),
+  brandPrimaryColor: varchar("brand_primary_color"),
+  lastDigestAt: timestamp("last_digest_at"),
+  lastActiveAt: timestamp("last_active_at"),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -109,8 +116,34 @@ export const goals = pgTable("goals", {
   description: text("description"),
   status: varchar("status").default("not_started"),
   targetDate: timestamp("target_date"),
+  parentGoalId: integer("parent_goal_id"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const meetings = pgTable("meetings", {
+  id: serial("id").primaryKey(),
+  organizationId: integer("organization_id").notNull(),
+  managerId: varchar("manager_id").notNull(),
+  employeeId: varchar("employee_id").notNull(),
+  scheduledAt: timestamp("scheduled_at").notNull(),
+  agenda: text("agenda"),
+  notes: text("notes"),
+  actionItems: text("action_items"),
+  status: varchar("status").default("scheduled"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const reviewTemplates = pgTable("review_templates", {
+  id: serial("id").primaryKey(),
+  organizationId: integer("organization_id").notNull(),
+  name: varchar("name").notNull(),
+  description: text("description"),
+  questions: text("questions").array(),
+  createdBy: varchar("created_by"),
+  isDefault: boolean("is_default").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const performanceMetrics = pgTable("performance_metrics", {
@@ -309,6 +342,8 @@ export const insertInvoiceSchema = createInsertSchema(invoices).omit({ id: true,
 export const insertActivityLogSchema = createInsertSchema(activityLogs).omit({ id: true, createdAt: true });
 export const insertAnnouncementSchema = createInsertSchema(announcements).omit({ id: true, createdAt: true });
 export const insertInvitationSchema = createInsertSchema(invitations).omit({ id: true, createdAt: true, acceptedAt: true, acceptedByUserId: true });
+export const insertMeetingSchema = createInsertSchema(meetings).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertReviewTemplateSchema = createInsertSchema(reviewTemplates).omit({ id: true, createdAt: true });
 
 // Types
 export type UpsertUser = z.infer<typeof insertUserSchema>;
@@ -333,6 +368,10 @@ export type InsertAnnouncement = z.infer<typeof insertAnnouncementSchema>;
 export type Announcement = typeof announcements.$inferSelect;
 export type InsertInvitation = z.infer<typeof insertInvitationSchema>;
 export type Invitation = typeof invitations.$inferSelect;
+export type InsertMeeting = z.infer<typeof insertMeetingSchema>;
+export type Meeting = typeof meetings.$inferSelect;
+export type InsertReviewTemplate = z.infer<typeof insertReviewTemplateSchema>;
+export type ReviewTemplate = typeof reviewTemplates.$inferSelect;
 
 // Extended types
 export type UserWithRelations = User & {

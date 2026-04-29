@@ -28,6 +28,7 @@ import {
   CreditCard,
   Mail,
   Building,
+  CalendarClock,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -71,6 +72,7 @@ export default function Sidebar() {
       { name: "Reports", href: "/reports", icon: FileText, badge: null },
       { name: "Tasks", href: "/tasks", icon: ClipboardList, badge: null },
       { name: "Timeline", href: "/timeline", icon: Clock, badge: null },
+      { name: "Meetings", href: "/meetings", icon: CalendarClock, badge: null },
       { name: "Team", href: "/team", icon: Users, badge: null, requiresRole: ["supervisor", "manager", "executive"] },
       { name: "Analytics", href: "/analytics", icon: BarChart3, badge: null, requiresRole: ["supervisor", "manager", "executive"] },
       { name: "Org Chart", href: "/org-chart", icon: Network, badge: null, requiresRole: ["supervisor", "manager", "executive"] },
@@ -88,11 +90,13 @@ export default function Sidebar() {
       manager: [
         { name: "Department Overview", href: "/department", icon: PieChart, badge: null },
         { name: "Resource Planning", href: "/resources", icon: Briefcase, badge: null },
+        { name: "Review Templates", href: "/review-templates", icon: ClipboardList, badge: null },
         { name: "Team Invites", href: "/team-invites", icon: Mail, badge: null },
       ],
       executive: [
         { name: "Admin Dashboard", href: "/admin-dashboard", icon: Shield, badge: null },
         { name: "User Management", href: "/admin-users", icon: Users, badge: null },
+        { name: "Review Templates", href: "/review-templates", icon: ClipboardList, badge: null },
         { name: "Team Invites", href: "/team-invites", icon: Mail, badge: null },
         { name: "Organization", href: "/organization", icon: Building, badge: null },
         { name: "Billing", href: "/billing", icon: CreditCard, badge: null },

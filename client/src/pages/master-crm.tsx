@@ -22,7 +22,9 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Building2, Users, DollarSign, TrendingUp, Activity, Megaphone,
   CheckCircle2, XCircle, PauseCircle, FileText, Plus, AlertTriangle,
+  Heart, UserCog, Send,
 } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
 type MasterStats = {
   totalOrganizations: number;
@@ -61,12 +63,12 @@ type ActivityItem = {
 type Invoice = {
   id: number;
   organizationId: number;
-  amount: number;
-  currency: string;
+  amountCents: number;
   status: string;
+  description: string | null;
   dueDate: string | null;
   paidAt: string | null;
-  createdAt: string;
+  issuedAt: string;
 };
 
 const PLAN_PRICES: Record<string, number> = {
@@ -101,6 +103,30 @@ export default function MasterCrm() {
   const orgsQuery = useQuery<Organization[]>({ queryKey: ["/api/master/organizations"] });
   const activityQuery = useQuery<ActivityItem[]>({ queryKey: ["/api/master/activity"] });
   const invoicesQuery = useQuery<Invoice[]>({ queryKey: ["/api/master/invoices"] });
+  const mrrQuery = useQuery<Array<{ month: string; revenue: number }>>({ queryKey: ["/api/master/mrr"] });
+  const healthQuery = useQuery<Array<{
+    id: number; name: string; lastActivityAt: string | null; daysSinceActivity: number | null; isAtRisk: boolean;
+  }>>({ queryKey: ["/api/master/health"] });
+
+  const broadcastMutation = useMutation({
+    mutationFn: async (d: { title: string; message: string }) =>
+      apiRequest("POST", "/api/master/broadcast", d),
+    onSuccess: async (resp: any) => {
+      const data = await resp.json().catch(() => ({}));
+      toast({ title: "Broadcast sent", description: `Reached ${data.recipients ?? "all"} users.` });
+    },
+    onError: (e: any) => toast({ title: "Broadcast failed", description: e.message, variant: "destructive" }),
+  });
+
+  const impersonateMutation = useMutation({
+    mutationFn: async (userId: string) =>
+      apiRequest("POST", `/api/master/impersonate/${userId}`),
+    onSuccess: () => {
+      toast({ title: "Impersonating user — reloading…" });
+      setTimeout(() => window.location.assign("/"), 600);
+    },
+    onError: (e: any) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
 
   // Forbidden = not super admin
   const forbidden =
@@ -192,11 +218,15 @@ export default function MasterCrm() {
               Manage every organization on the platform.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <BroadcastDialog
+              onSubmit={(d) => broadcastMutation.mutate(d)}
+              pending={broadcastMutation.isPending}
+            />
             <Dialog open={announceOpen} onOpenChange={setAnnounceOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" data-testid="button-open-announce">
-                  <Megaphone className="w-4 h-4 mr-2" /> Send announcement
+                  <Megaphone className="w-4 h-4 mr-2" /> Announcement
                 </Button>
               </DialogTrigger>
               <AnnounceDialog onSubmit={(d) => announceMutation.mutate(d)} pending={announceMutation.isPending} />
@@ -243,6 +273,70 @@ export default function MasterCrm() {
               .map(([p, n]) => `${p}: ${n}`).join(" · ") : ""}
             testId="stat-plan-mix"
           />
+        </div>
+
+        {/* MRR + Health row */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="w-4 h-4" /> Recurring revenue (last 12 months)
+              </CardTitle>
+              <CardDescription>Monthly paid invoices.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!mrrQuery.data ? (
+                <p className="text-sm text-gray-500 py-8 text-center">Loading…</p>
+              ) : (
+                <div style={{ width: "100%", height: 220 }} data-testid="chart-mrr">
+                  <ResponsiveContainer>
+                    <LineChart data={mrrQuery.data}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v}`} />
+                      <RTooltip formatter={(v: any) => `$${v}`} />
+                      <Line type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Heart className="w-4 h-4" /> Org health
+              </CardTitle>
+              <CardDescription>At-risk = inactive 14+ days or suspended.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!healthQuery.data ? (
+                <p className="text-sm text-gray-500 py-4 text-center">Loading…</p>
+              ) : (
+                <ul className="space-y-2 max-h-[220px] overflow-y-auto">
+                  {healthQuery.data.slice(0, 12).map((h) => (
+                    <li
+                      key={h.id}
+                      className="flex items-center justify-between text-sm border-b border-gray-100 dark:border-gray-800 pb-2"
+                      data-testid={`health-${h.id}`}
+                    >
+                      <span className="truncate flex-1">{h.name}</span>
+                      <Badge
+                        variant="outline"
+                        className={h.isAtRisk
+                          ? "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30"
+                          : "bg-green-500/15 text-green-700 dark:text-green-300 border-green-500/30"}
+                      >
+                        {h.isAtRisk ? "at risk" : "healthy"}
+                        {h.daysSinceActivity !== null && <span className="ml-1 opacity-70">· {h.daysSinceActivity}d</span>}
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         <Tabs defaultValue="organizations" className="w-full">
@@ -301,6 +395,23 @@ export default function MasterCrm() {
                           <TableCell className="text-sm">{formatDate(org.trialEndsAt)}</TableCell>
                           <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                             <div className="flex justify-end gap-1">
+                              {org.ownerEmail && (
+                                <Button
+                                  size="sm" variant="ghost"
+                                  title="Impersonate org owner"
+                                  onClick={async () => {
+                                    // Fetch users for this org via master endpoint
+                                    const res = await fetch(`/api/master/organizations/${org.id}`, { credentials: "include" });
+                                    const data = await res.json();
+                                    const owner = data.members?.find((m: any) => m.role === "executive") || data.members?.[0];
+                                    if (owner?.id) impersonateMutation.mutate(owner.id);
+                                    else toast({ title: "No user to impersonate", variant: "destructive" });
+                                  }}
+                                  data-testid={`button-impersonate-${org.id}`}
+                                >
+                                  <UserCog className="w-4 h-4 text-blue-600" />
+                                </Button>
+                              )}
                               {org.status !== "active" && (
                                 <Button
                                   size="sm" variant="ghost"
@@ -405,7 +516,7 @@ export default function MasterCrm() {
                           <TableRow key={inv.id} data-testid={`row-invoice-${inv.id}`}>
                             <TableCell>#{inv.id}</TableCell>
                             <TableCell>{org?.name || `Org ${inv.organizationId}`}</TableCell>
-                            <TableCell>{formatMoney(inv.amount, inv.currency)}</TableCell>
+                            <TableCell>{formatMoney(inv.amountCents)}</TableCell>
                             <TableCell><Badge variant="outline">{inv.status}</Badge></TableCell>
                             <TableCell>{formatDate(inv.dueDate)}</TableCell>
                             <TableCell>{formatDate(inv.paidAt)}</TableCell>
@@ -548,6 +659,51 @@ function CreateOrgDialog({ onSubmit, pending }: {
         </Button>
       </DialogFooter>
     </DialogContent>
+  );
+}
+
+function BroadcastDialog({ onSubmit, pending }: {
+  onSubmit: (d: { title: string; message: string }) => void;
+  pending: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [message, setMessage] = useState("");
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" data-testid="button-open-broadcast">
+          <Send className="w-4 h-4 mr-2" /> Broadcast email
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Email broadcast</DialogTitle>
+          <DialogDescription>
+            Sends a notification + email to every user across every organization.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div>
+            <Label>Title</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} data-testid="input-broadcast-title" />
+          </div>
+          <div>
+            <Label>Message</Label>
+            <Textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={5} data-testid="input-broadcast-message" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button
+            disabled={pending || !title || !message}
+            onClick={() => { onSubmit({ title, message }); setOpen(false); setTitle(""); setMessage(""); }}
+            data-testid="button-submit-broadcast"
+          >
+            {pending ? "Sending…" : "Send to everyone"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

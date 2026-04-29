@@ -11,6 +11,8 @@ import {
   activityLogs,
   announcements,
   invitations,
+  meetings,
+  reviewTemplates,
   type User,
   type UpsertUser,
   type InsertReport,
@@ -33,6 +35,10 @@ import {
   type InsertAnnouncement,
   type Invitation,
   type InsertInvitation,
+  type Meeting,
+  type InsertMeeting,
+  type ReviewTemplate,
+  type InsertReviewTemplate,
   type UserWithRelations,
   type ReportWithRelations,
   type TaskWithRelations,
@@ -77,6 +83,7 @@ export interface IStorage {
   createNotification(notification: InsertNotification): Promise<Notification>;
   getUserNotifications(userId: string, limit?: number): Promise<Notification[]>;
   markNotificationAsRead(id: number): Promise<void>;
+  markAllNotificationsAsRead(userId: string): Promise<void>;
   getUnreadNotificationCount(userId: string): Promise<number>;
 
   // Dashboard stats & admin
@@ -163,6 +170,17 @@ export interface IStorage {
   listInvitationsByOrg(orgId: number): Promise<Invitation[]>;
   revokeInvitation(id: number, orgId: number): Promise<void>;
   acceptInvitation(token: string, userId: string): Promise<Invitation | undefined>;
+
+  // Meetings (1-on-1)
+  listMeetings(filters: { organizationId: number; userId?: string }): Promise<Meeting[]>;
+  createMeeting(m: InsertMeeting): Promise<Meeting>;
+  updateMeeting(id: number, updates: Partial<InsertMeeting>): Promise<Meeting | undefined>;
+  deleteMeeting(id: number): Promise<void>;
+
+  // Review templates
+  listReviewTemplates(orgId: number): Promise<ReviewTemplate[]>;
+  createReviewTemplate(t: InsertReviewTemplate): Promise<ReviewTemplate>;
+  deleteReviewTemplate(id: number, orgId: number): Promise<void>;
 
   // Backfill
   ensureDefaultOrganization(): Promise<Organization>;
@@ -342,6 +360,12 @@ export class DatabaseStorage implements IStorage {
 
   async markNotificationAsRead(id: number): Promise<void> {
     await db.update(notifications).set({ isRead: true }).where(eq(notifications.id, id));
+  }
+
+  async markAllNotificationsAsRead(userId: string): Promise<void> {
+    await db.update(notifications)
+      .set({ isRead: true })
+      .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)));
   }
 
   async getUnreadNotificationCount(userId: string): Promise<number> {
@@ -912,6 +936,49 @@ export class DatabaseStorage implements IStorage {
       .where(eq(invitations.token, token))
       .returning();
     return updated;
+  }
+
+  // ─── MEETINGS ───
+  async listMeetings(filters: { organizationId: number; userId?: string }): Promise<Meeting[]> {
+    const conds = [eq(meetings.organizationId, filters.organizationId)];
+    if (filters.userId) {
+      conds.push(or(eq(meetings.managerId, filters.userId), eq(meetings.employeeId, filters.userId))!);
+    }
+    return await db.select().from(meetings).where(and(...conds)).orderBy(desc(meetings.scheduledAt));
+  }
+
+  async createMeeting(m: InsertMeeting): Promise<Meeting> {
+    const [created] = await db.insert(meetings).values(m).returning();
+    return created;
+  }
+
+  async updateMeeting(id: number, updates: Partial<InsertMeeting>): Promise<Meeting | undefined> {
+    const [updated] = await db.update(meetings)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(meetings.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteMeeting(id: number): Promise<void> {
+    await db.delete(meetings).where(eq(meetings.id, id));
+  }
+
+  // ─── REVIEW TEMPLATES ───
+  async listReviewTemplates(orgId: number): Promise<ReviewTemplate[]> {
+    return await db.select().from(reviewTemplates)
+      .where(eq(reviewTemplates.organizationId, orgId))
+      .orderBy(desc(reviewTemplates.createdAt));
+  }
+
+  async createReviewTemplate(t: InsertReviewTemplate): Promise<ReviewTemplate> {
+    const [created] = await db.insert(reviewTemplates).values(t).returning();
+    return created;
+  }
+
+  async deleteReviewTemplate(id: number, orgId: number): Promise<void> {
+    await db.delete(reviewTemplates)
+      .where(and(eq(reviewTemplates.id, id), eq(reviewTemplates.organizationId, orgId)));
   }
 }
 

@@ -239,3 +239,39 @@ THE SUPERVISOR is a hierarchical performance reporting and feedback platform des
 
 Preferred communication style: Simple, everyday language.
 User wants comprehensive admin system with organizational flow and role-based access.
+## Multi-Tenant SaaS Upgrade (Apr 2026)
+
+### Schema additions
+- `organizations` — `brandLogoUrl`, `brandPrimaryColor`, `lastDigestAt`
+- `goals` — `parentGoalId` (cascading goals)
+- `meetings` table (1-on-1s)
+- `reviewTemplates` table (per-org review questionnaires)
+
+### New API routes
+- `POST /api/notifications/read-all`
+- `GET /api/onboarding`
+- `GET /api/billing`, `POST /api/billing/checkout` (Stripe lazy-loaded; mock fallback)
+- `GET /api/organization/activity.csv`, `GET /api/organization/export`
+- `PATCH /api/organization/branding`
+- `GET /api/master/mrr`, `GET /api/master/health`
+- `POST /api/master/broadcast`
+- `POST /api/master/impersonate/:userId`, `POST /api/master/impersonate/stop`
+- `GET/POST/PATCH/DELETE /api/meetings`
+- `GET/POST/DELETE /api/review-templates`
+
+### New pages
+- `/meetings` — schedule and track 1-on-1s
+- `/review-templates` — build reusable review questionnaires
+- `/organization` — Profile + Branding + Data export + Activity tabs
+
+### New components
+- `ImpersonationBanner` — sticky amber banner with "Stop impersonating"
+- `OnboardingChecklist` widget on executive dashboard
+- `BroadcastDialog` on Master CRM
+
+### Stripe & WhatsApp
+- `STRIPE_SECRET_KEY` enables real checkout; without it, plans switch via mock invoices.
+- `WHATSAPP_API_TOKEN` + `WHATSAPP_PHONE_NUMBER_ID` enable WhatsApp Cloud API; without them, sends are skipped silently.
+
+### Plan limits (seats)
+trial=5, starter=25, professional=100, enterprise=1,000,000 — enforced server-side on invite/user create.

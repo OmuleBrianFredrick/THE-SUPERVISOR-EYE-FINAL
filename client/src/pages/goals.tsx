@@ -52,7 +52,7 @@ export default function Goals() {
   const [editGoal, setEditGoal] = useState<Goal | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
 
-  const [form, setForm] = useState({ title: "", description: "", status: "not_started" });
+  const [form, setForm] = useState<{ title: string; description: string; status: string; parentGoalId: number | null }>({ title: "", description: "", status: "not_started", parentGoalId: null });
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -70,7 +70,7 @@ export default function Goals() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/goals"] });
       setDialogOpen(false);
-      setForm({ title: "", description: "", status: "not_started" });
+      setForm({ title: "", description: "", status: "not_started", parentGoalId: null });
       toast({ title: "Goal created successfully" });
     },
     onError: () => toast({ title: "Failed to create goal", variant: "destructive" }),
@@ -100,15 +100,20 @@ export default function Goals() {
     updateMutation.mutate({ id: goal.id, status: STATUS_CYCLE[goal.status ?? "not_started"] });
   };
 
-  const openCreate = () => {
+  const openCreate = (parentGoalId: number | null = null) => {
     setEditGoal(null);
-    setForm({ title: "", description: "", status: "not_started" });
+    setForm({ title: "", description: "", status: "not_started", parentGoalId });
     setDialogOpen(true);
   };
 
   const openEdit = (goal: Goal) => {
     setEditGoal(goal);
-    setForm({ title: goal.title, description: goal.description ?? "", status: goal.status ?? "not_started" });
+    setForm({
+      title: goal.title,
+      description: goal.description ?? "",
+      status: goal.status ?? "not_started",
+      parentGoalId: (goal as any).parentGoalId ?? null,
+    });
     setDialogOpen(true);
   };
 
@@ -117,12 +122,18 @@ export default function Goals() {
       toast({ title: "Goal title is required", variant: "destructive" });
       return;
     }
+    const payload = { ...form, parentGoalId: form.parentGoalId || null };
     if (editGoal) {
-      updateMutation.mutate({ id: editGoal.id, ...form });
+      updateMutation.mutate({ id: editGoal.id, ...payload });
     } else {
-      createMutation.mutate(form);
+      createMutation.mutate(payload);
     }
   };
+
+  // Hierarchy: top-level goals first, with their children indented underneath
+  const topLevel = (filterStatus === "all" ? goals : goals.filter(g => g.status === filterStatus))
+    .filter((g: any) => !g.parentGoalId);
+  const childrenOf = (parentId: number) => goals.filter((g: any) => g.parentGoalId === parentId);
 
   if (isLoading || !isAuthenticated) {
     return (
@@ -230,56 +241,81 @@ export default function Goals() {
                 <div key={i} className="h-20 bg-gray-100 rounded-lg animate-pulse" />
               ))}
             </div>
-          ) : filteredGoals.length > 0 ? (
+          ) : topLevel.length > 0 ? (
             <div className="space-y-3">
-              {filteredGoals.map(goal => {
-                const meta = STATUS_META[goal.status ?? "not_started"];
-                const StatusIcon = meta.icon;
-                return (
-                  <Card key={goal.id} className="shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                    <CardContent className="p-5">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-3 flex-1 min-w-0">
-                          <StatusIcon className={`h-5 w-5 mt-0.5 shrink-0 ${meta.color}`} />
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold text-gray-900 mb-1">{goal.title}</h3>
-                            {goal.description && (
-                              <p className="text-sm text-gray-500">{goal.description}</p>
-                            )}
-                            <p className="text-xs text-gray-400 mt-1">
-                              Created {new Date(goal.createdAt!).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </div>
+              {topLevel.map(goal => {
+                const renderGoal = (g: Goal, depth: number) => {
+                  const meta = STATUS_META[g.status ?? "not_started"];
+                  const StatusIcon = meta.icon;
+                  const kids = childrenOf(g.id);
+                  return (
+                    <div key={g.id}>
+                      <Card
+                        className={`shadow-sm border border-gray-100 hover:shadow-md transition-shadow ${depth > 0 ? "border-l-4 border-l-primary/40" : ""}`}
+                        style={{ marginLeft: depth * 24 }}
+                        data-testid={`card-goal-${g.id}`}
+                      >
+                        <CardContent className="p-5">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-start gap-3 flex-1 min-w-0">
+                              <StatusIcon className={`h-5 w-5 mt-0.5 shrink-0 ${meta.color}`} />
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-gray-900 mb-1">
+                                  {depth > 0 && <span className="text-xs text-primary mr-2">↳ sub-goal</span>}
+                                  {g.title}
+                                </h3>
+                                {g.description && <p className="text-sm text-gray-500">{g.description}</p>}
+                                <p className="text-xs text-gray-400 mt-1">
+                                  Created {new Date(g.createdAt!).toLocaleDateString()}
+                                  {kids.length > 0 && <span className="ml-2 text-primary">· {kids.length} sub-goal{kids.length !== 1 ? "s" : ""}</span>}
+                                </p>
+                              </div>
+                            </div>
 
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button
-                            onClick={() => advanceStatus(goal)}
-                            title="Click to advance status"
-                            className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${meta.bg} ${meta.color} hover:opacity-80 transition-opacity`}
-                          >
-                            {meta.label}
-                            <ChevronRight className="h-3 w-3" />
-                          </button>
-                          <button
-                            onClick={() => openEdit(goal)}
-                            className="text-gray-400 hover:text-blue-500 transition-colors p-1"
-                            title="Edit goal"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => deleteMutation.mutate(goal.id)}
-                            className="text-gray-400 hover:text-red-500 transition-colors p-1"
-                            title="Delete goal"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                onClick={() => advanceStatus(g)}
+                                title="Click to advance status"
+                                className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${meta.bg} ${meta.color} hover:opacity-80 transition-opacity`}
+                              >
+                                {meta.label}
+                                <ChevronRight className="h-3 w-3" />
+                              </button>
+                              <button
+                                onClick={() => openCreate(g.id)}
+                                className="text-gray-400 hover:text-primary transition-colors p-1"
+                                title="Add sub-goal"
+                                data-testid={`button-add-subgoal-${g.id}`}
+                              >
+                                <Plus className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => openEdit(g)}
+                                className="text-gray-400 hover:text-blue-500 transition-colors p-1"
+                                title="Edit goal"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => deleteMutation.mutate(g.id)}
+                                className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                                title="Delete goal"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      {kids.length > 0 && (
+                        <div className="space-y-3 mt-3">
+                          {kids.map((c) => renderGoal(c, depth + 1))}
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
+                      )}
+                    </div>
+                  );
+                };
+                return renderGoal(goal, 0);
               })}
             </div>
           ) : (
@@ -340,6 +376,25 @@ export default function Goals() {
                   <SelectItem value="not_started">Not Started</SelectItem>
                   <SelectItem value="in_progress">In Progress</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Parent goal (optional)</Label>
+              <Select
+                value={form.parentGoalId ? String(form.parentGoalId) : "none"}
+                onValueChange={v => setForm(f => ({ ...f, parentGoalId: v === "none" ? null : Number(v) }))}
+              >
+                <SelectTrigger data-testid="select-parent-goal">
+                  <SelectValue placeholder="No parent" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No parent (top-level)</SelectItem>
+                  {goals
+                    .filter((g: any) => !editGoal || g.id !== editGoal.id)
+                    .map((g) => (
+                      <SelectItem key={g.id} value={String(g.id)}>{g.title}</SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>

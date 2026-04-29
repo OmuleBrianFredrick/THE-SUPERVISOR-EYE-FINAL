@@ -27,6 +27,36 @@ const isSuperAdmin: RequestHandler = async (req: any, res, next) => {
   next();
 };
 
+// ─── Plan catalog + limits + helpers ───
+export const PLANS = [
+  { id: "trial",        name: "Trial",        priceCents: 0,     userLimit: 5,        features: ["14-day trial", "Up to 5 users", "Basic reports"] },
+  { id: "starter",      name: "Starter",      priceCents: 4900,  userLimit: 25,       features: ["Up to 25 users", "All reports", "Email support"] },
+  { id: "professional", name: "Professional", priceCents: 14900, userLimit: 100,      features: ["Up to 100 users", "Analytics", "Priority support"] },
+  { id: "enterprise",   name: "Enterprise",   priceCents: 49900, userLimit: 1_000_000, features: ["Unlimited users", "Custom integrations", "Dedicated support"] },
+];
+
+export function getPlanLimit(planId: string): number {
+  return PLANS.find((p) => p.id === planId)?.userLimit ?? 5;
+}
+
+export async function getOrgUsage(orgId: number) {
+  try {
+    const [members, invites] = await Promise.all([
+      storage.getAllUsers(orgId).catch(() => []),
+      storage.listInvitationsByOrg(orgId).catch(() => []),
+    ]);
+    const activeMemberCount = (members as any[]).length;
+    const pendingInvites = (invites as any[]).filter((i: any) => i.status === "pending").length;
+    return {
+      activeMemberCount,
+      pendingInvites,
+      totalCommittedSeats: activeMemberCount + pendingInvites,
+    };
+  } catch {
+    return { activeMemberCount: 0, pendingInvites: 0, totalCommittedSeats: 0 };
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
 
@@ -37,7 +67,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.getUserWithRelations(userId);
       if (!user) return res.status(404).json({ message: "User not found" });
       const { password, ...safeUser } = user as any;
-      res.json(safeUser);
+      // Expose impersonation flag so the UI can render a banner
+      const impersonatedFromUserId = (req.session as any).impersonatedFromUserId || null;
+      res.json({ ...safeUser, impersonatedFromUserId });
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
@@ -313,6 +345,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/notifications/read-all', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      await storage.markAllNotificationsAsRead(userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error marking all notifications as read:", error);
+      res.status(500).json({ message: "Failed to mark all notifications as read" });
+    }
+  });
+
   // ─── TEAM ───
   app.get('/api/team', isAuthenticated, async (req: any, res) => {
     try {
@@ -459,12 +502,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = (req.session as any).userId;
       const user = await storage.getUser(userId);
+
+      // Allow assigning a goal to someone else (assigneeUserId) — defaults to self
+      const assigneeUserId = (req.body?.assigneeUserId as string) || userId;
       const goalData = insertGoalSchema.parse({
         ...req.body,
-        userId,
+        userId: assigneeUserId,
         organizationId: user?.organizationId ?? null,
       });
       const goal = await storage.createGoal(goalData);
+
+      // Notify the assignee if it isn't themselves
+      if (assigneeUserId !== userId) {
+        try {
+          const assignee = await storage.getUser(assigneeUserId);
+          if (assignee) {
+            const assignerName = `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || user?.email || "Your supervisor";
+            await storage.createNotification({
+              organizationId: user?.organizationId ?? null,
+              userId: assigneeUserId,
+              type: "goal_assigned",
+              title: "New goal assigned to you",
+              message: `${assignerName} assigned you a new goal: "${goal.title}".`,
+            });
+            if (assignee.email) {
+              sendEmail({
+                to: assignee.email,
+                subject: "A new goal has been assigned to you",
+                html: buildNotificationEmail(
+                  "New goal assigned",
+                  `${assignerName} assigned you a new goal: <b>${goal.title}</b>.${goal.description ? `<br/><br/>${goal.description}` : ""}`
+                ),
+              }).catch(() => {});
+            }
+          }
+        } catch (notifyErr) {
+          console.error("Notify (goal assigned) failed:", notifyErr);
+        }
+      }
+
       res.json(goal);
     } catch (error) {
       console.error("Error creating goal:", error);
@@ -794,6 +870,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allowedRoles = ["employee", "supervisor", "manager"];
       const targetRole = allowedRoles.includes(role) ? role : "employee";
 
+      // Enforce plan user-limit
+      const orgForLimit = await storage.getOrganization(user.organizationId);
+      const limit = getPlanLimit(orgForLimit?.plan || "trial");
+      const usage = await getOrgUsage(user.organizationId);
+      if (usage.totalCommittedSeats >= limit) {
+        return res.status(402).json({
+          message: `Your ${orgForLimit?.plan || "trial"} plan is limited to ${limit} seats. You've used ${usage.totalCommittedSeats}. Upgrade to invite more teammates.`,
+          limit,
+          used: usage.totalCommittedSeats,
+          upgradeRequired: true,
+        });
+      }
+
       // Validate supervisor (if provided) belongs to same org
       let validSupervisorId: string | null = null;
       if (supervisorId && supervisorId !== "none") {
@@ -931,12 +1020,120 @@ export async function registerRoutes(app: Express): Promise<Server> {
         details: `${user.email || user.id} joined as ${inv.role}`,
       });
 
+      // Notify supervisor + org owner that invite was accepted
+      try {
+        const newMemberName = `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email || "A new teammate";
+        const recipientIds = new Set<string>();
+        if (inv.invitedById) recipientIds.add(inv.invitedById);
+        if (inv.supervisorId) recipientIds.add(inv.supervisorId);
+        const org = await storage.getOrganization(inv.organizationId);
+        if (org?.ownerExecutiveId) recipientIds.add(org.ownerExecutiveId);
+        recipientIds.delete(user.id);
+
+        for (const rid of recipientIds) {
+          const recipient = await storage.getUser(rid);
+          if (!recipient) continue;
+          await storage.createNotification({
+            organizationId: inv.organizationId,
+            userId: rid,
+            type: "invitation_accepted",
+            title: "New teammate joined",
+            message: `${newMemberName} accepted your invitation and joined as ${inv.role}.`,
+          });
+          if (recipient.email) {
+            sendEmail({
+              to: recipient.email,
+              subject: "New teammate joined your organization",
+              html: buildNotificationEmail(
+                "New teammate joined",
+                `${newMemberName} just accepted your invitation and joined ${org?.name || "your organization"} as ${inv.role}.`
+              ),
+            }).catch(() => {});
+          }
+        }
+      } catch (notifyErr) {
+        console.error("Notify (invite accepted) failed:", notifyErr);
+      }
+
       const refreshed = await storage.getUser(user.id);
       const { password: _, ...safeUser } = (refreshed || user) as any;
       res.json(safeUser);
     } catch (error) {
       console.error("Error accepting invitation:", error);
       res.status(500).json({ message: "Failed to accept invitation" });
+    }
+  });
+
+  // ════════════════════════════════════════════════
+  // ONBOARDING CHECKLIST (Executive view)
+  // ════════════════════════════════════════════════
+  app.get('/api/onboarding', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      if (!user?.organizationId) return res.json({ items: [], complete: true, percent: 100 });
+
+      const orgId = user.organizationId;
+      const [members, invites, reports, org] = await Promise.all([
+        storage.getAllUsers(orgId).catch(() => []),
+        storage.listInvitationsByOrg(orgId).catch(() => []),
+        storage.getReports({ organizationId: orgId }).catch(() => []),
+        storage.getOrganization(orgId),
+      ]);
+
+      const teamSize = (members as any[]).length;
+      const inviteCount = (invites as any[]).length;
+      const reportsCount = (reports as any[]).length;
+      const reviewedReports = (reports as any[]).filter((r: any) => r.status === "approved" || r.reviewedAt).length;
+      const profileComplete = !!(org?.industry && org?.contactEmail);
+
+      const items = [
+        {
+          id: "profile",
+          title: "Complete your organization profile",
+          description: "Add an industry and contact email so your team and customers know who you are.",
+          done: profileComplete,
+          link: "/organization",
+        },
+        {
+          id: "invite",
+          title: "Invite your first teammate",
+          description: "Bring at least one teammate on board so reports can flow.",
+          done: teamSize > 1 || inviteCount > 0,
+          link: "/team-invites",
+        },
+        {
+          id: "report",
+          title: "Receive your first report",
+          description: "Have a teammate submit their first report.",
+          done: reportsCount > 0,
+          link: "/reports",
+        },
+        {
+          id: "review",
+          title: "Review your first report",
+          description: "Approve or request a revision on a report your team submitted.",
+          done: reviewedReports > 0,
+          link: "/reports",
+        },
+        {
+          id: "billing",
+          title: "Pick a plan",
+          description: "Move from trial to a paid plan to unlock the full team.",
+          done: !!(org?.plan && org.plan !== "trial"),
+          link: "/billing",
+        },
+      ];
+
+      const completed = items.filter((i) => i.done).length;
+      res.json({
+        items,
+        complete: completed === items.length,
+        percent: Math.round((completed / items.length) * 100),
+      });
+    } catch (error) {
+      console.error("Error computing onboarding:", error);
+      res.status(500).json({ message: "Failed to compute onboarding" });
     }
   });
 
@@ -951,13 +1148,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user?.organizationId) return res.status(404).json({ message: "No organization" });
       const org = await storage.getOrganization(user.organizationId);
       const invoices = await storage.listInvoices(user.organizationId);
-      const plans = [
-        { id: "trial", name: "Trial", priceCents: 0, features: ["14-day trial", "Up to 5 users", "Basic reports"] },
-        { id: "starter", name: "Starter", priceCents: 4900, features: ["Up to 25 users", "All reports", "Email support"] },
-        { id: "professional", name: "Professional", priceCents: 14900, features: ["Up to 100 users", "Analytics", "Priority support"] },
-        { id: "enterprise", name: "Enterprise", priceCents: 49900, features: ["Unlimited users", "Custom integrations", "Dedicated support"] },
-      ];
-      res.json({ organization: org, invoices, plans });
+      const usage = await getOrgUsage(user.organizationId);
+      res.json({
+        organization: org,
+        invoices,
+        plans: PLANS,
+        usage,
+        stripeEnabled: !!process.env.STRIPE_SECRET_KEY,
+      });
     } catch (error) {
       console.error("Error fetching billing:", error);
       res.status(500).json({ message: "Failed to fetch billing" });
@@ -972,24 +1170,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (user.role !== "executive" && !user.isSuperAdmin) {
         return res.status(403).json({ message: "Only executives can change the plan" });
       }
-      const { plan } = req.body as { plan: string };
-      const allowed = ["trial", "starter", "professional", "enterprise"];
-      if (!allowed.includes(plan)) return res.status(400).json({ message: "Invalid plan" });
+      const { plan, billingPeriod } = req.body as { plan: string; billingPeriod?: string };
+      if (!PLANS.find((p) => p.id === plan)) return res.status(400).json({ message: "Invalid plan" });
+      const period = billingPeriod === "annual" ? "annual" : "monthly";
 
       const updated = await storage.updateOrganization(user.organizationId, {
         plan,
+        billingPeriod: period,
         status: plan === "trial" ? "trial" : "active",
       });
       await storage.logActivity({
         organizationId: user.organizationId,
         userId: user.id,
         action: "plan_changed",
-        details: `${user.email || user.id} changed plan to ${plan}`,
+        details: `${user.email || user.id} changed plan to ${plan} (${period})`,
       });
       res.json(updated);
     } catch (error) {
       console.error("Error changing plan:", error);
       res.status(500).json({ message: "Failed to change plan" });
+    }
+  });
+
+  // Stripe checkout scaffold — uses real Stripe if STRIPE_SECRET_KEY is set, otherwise returns a mock URL
+  app.post('/api/billing/checkout', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      if (!user?.organizationId) return res.status(404).json({ message: "No organization" });
+      if (user.role !== "executive" && !user.isSuperAdmin) {
+        return res.status(403).json({ message: "Only executives can manage billing" });
+      }
+      const { plan, billingPeriod } = req.body as { plan: string; billingPeriod?: string };
+      const planDef = PLANS.find((p) => p.id === plan);
+      if (!planDef || plan === "trial") return res.status(400).json({ message: "Invalid plan" });
+      const period = billingPeriod === "annual" ? "annual" : "monthly";
+
+      const stripeKey = process.env.STRIPE_SECRET_KEY;
+      if (!stripeKey) {
+        // Mock checkout — directly switch plan and create a paid invoice record
+        const cents = period === "annual"
+          ? Math.round(planDef.priceCents * 12 * 0.8)
+          : planDef.priceCents;
+        await storage.updateOrganization(user.organizationId, {
+          plan,
+          billingPeriod: period,
+          status: "active",
+        });
+        await storage.createInvoice({
+          organizationId: user.organizationId,
+          amountCents: cents,
+          status: "paid",
+          dueDate: new Date(),
+          description: `${planDef.name} (${period}) — test mode`,
+        } as any);
+        await storage.logActivity({
+          organizationId: user.organizationId,
+          userId: user.id,
+          action: "checkout_mock",
+          details: `Mock checkout for ${plan} (${period}) — Stripe not configured`,
+        });
+        return res.json({ url: "/billing?checkout=mock-success", mock: true });
+      }
+
+      // Real Stripe (lazy import so dev works without the package)
+      try {
+        const Stripe = (await import("stripe")).default as any;
+        const stripe = new Stripe(stripeKey);
+        const cents = period === "annual"
+          ? Math.round(planDef.priceCents * 12 * 0.8)
+          : planDef.priceCents;
+        const session = await stripe.checkout.sessions.create({
+          mode: "subscription",
+          payment_method_types: ["card"],
+          line_items: [{
+            price_data: {
+              currency: "usd",
+              product_data: { name: `The Supervisor — ${planDef.name} (${period})` },
+              unit_amount: cents,
+              recurring: { interval: period === "annual" ? "year" : "month" },
+            },
+            quantity: 1,
+          }],
+          customer_email: user.email,
+          metadata: { organizationId: String(user.organizationId), plan, billingPeriod: period },
+          success_url: `${req.headers.origin || "https://" + req.get("host")}/billing?checkout=success`,
+          cancel_url: `${req.headers.origin || "https://" + req.get("host")}/billing?checkout=cancel`,
+        });
+        return res.json({ url: session.url });
+      } catch (stripeErr) {
+        console.error("Stripe checkout failed:", stripeErr);
+        return res.status(500).json({ message: "Stripe checkout failed. Verify STRIPE_SECRET_KEY." });
+      }
+    } catch (error) {
+      console.error("Error in checkout:", error);
+      res.status(500).json({ message: "Failed to start checkout" });
     }
   });
 
@@ -1169,6 +1444,334 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid data", errors: error.errors });
       }
       res.status(500).json({ message: "Failed to create announcement" });
+    }
+  });
+
+  // ════════════════════════════════════════════════
+  // EXTRA ENDPOINTS: exports, branding, MRR, broadcast, impersonate, meetings, templates
+  // ════════════════════════════════════════════════
+
+  // U4: Audit log CSV export
+  app.get('/api/organization/activity.csv', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      if (!user?.organizationId) return res.status(404).json({ message: "No organization" });
+      if (user.role !== "executive" && !user.isSuperAdmin) {
+        return res.status(403).json({ message: "Only executives can export activity" });
+      }
+      const logs = await storage.getActivityLogs(user.organizationId, 5000);
+      const escape = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+      const rows = [
+        ["id", "timestamp", "user_id", "action", "details"].join(","),
+        ...logs.map((l) => [
+          l.id, l.createdAt?.toISOString() || "", l.userId || "", l.action, l.details || "",
+        ].map(escape).join(",")),
+      ].join("\n");
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="activity-${Date.now()}.csv"`);
+      res.send(rows);
+    } catch (err) {
+      console.error("Error exporting activity csv:", err);
+      res.status(500).json({ message: "Failed to export" });
+    }
+  });
+
+  // U6: Org JSON data export (full dump)
+  app.get('/api/organization/export', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      if (!user?.organizationId) return res.status(404).json({ message: "No organization" });
+      if (user.role !== "executive" && !user.isSuperAdmin) {
+        return res.status(403).json({ message: "Only executives can export org data" });
+      }
+      const orgId = user.organizationId;
+      const [org, members, invites, reports, invoicesList, activity] = await Promise.all([
+        storage.getOrganization(orgId),
+        storage.getAllUsers(orgId),
+        storage.listInvitationsByOrg(orgId),
+        storage.getReports({ organizationId: orgId, limit: 10000 }).catch(() => []),
+        storage.listInvoices(orgId),
+        storage.getActivityLogs(orgId, 5000),
+      ]);
+      const stripPw = (u: any) => { const { password, resetToken, ...rest } = u || {}; return rest; };
+      const dump = {
+        exportedAt: new Date().toISOString(),
+        organization: org,
+        members: (members as any[]).map(stripPw),
+        invitations: invites,
+        reports,
+        invoices: invoicesList,
+        activity,
+      };
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Content-Disposition", `attachment; filename="org-${orgId}-export-${Date.now()}.json"`);
+      res.send(JSON.stringify(dump, null, 2));
+    } catch (err) {
+      console.error("Error exporting org json:", err);
+      res.status(500).json({ message: "Failed to export" });
+    }
+  });
+
+  // U7: Custom branding (executives can update brand fields on their own org)
+  app.patch('/api/organization/branding', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      if (!user?.organizationId) return res.status(404).json({ message: "No organization" });
+      if (user.role !== "executive" && !user.isSuperAdmin) {
+        return res.status(403).json({ message: "Only executives can change branding" });
+      }
+      const { brandLogoUrl, brandPrimaryColor } = req.body || {};
+      const updated = await storage.updateOrganization(user.organizationId, {
+        brandLogoUrl, brandPrimaryColor,
+      } as any);
+      await storage.logActivity({
+        organizationId: user.organizationId,
+        userId: user.id,
+        action: "branding_updated",
+        details: `Brand updated by ${user.email || user.id}`,
+      });
+      res.json(updated);
+    } catch (err) {
+      console.error("Error updating branding:", err);
+      res.status(500).json({ message: "Failed to update branding" });
+    }
+  });
+
+  // U9: MRR — paid invoices grouped by month (last 12 months)
+  app.get('/api/master/mrr', isSuperAdmin, async (_req, res) => {
+    try {
+      const all = await storage.listInvoices();
+      const buckets = new Map<string, number>();
+      const now = new Date();
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        buckets.set(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, 0);
+      }
+      for (const inv of all) {
+        if (inv.status !== "paid") continue;
+        const date = inv.paidAt || inv.createdAt;
+        if (!date) continue;
+        const d = new Date(date);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        if (buckets.has(key)) buckets.set(key, buckets.get(key)! + ((inv as any).amountCents || 0));
+      }
+      const series = Array.from(buckets.entries()).map(([month, cents]) => ({
+        month, revenueCents: cents, revenue: Math.round(cents / 100),
+      }));
+      res.json(series);
+    } catch (err) {
+      console.error("Error computing MRR:", err);
+      res.status(500).json({ message: "Failed to compute MRR" });
+    }
+  });
+
+  // U10: Broadcast — notify every user across the platform
+  app.post('/api/master/broadcast', isSuperAdmin, async (req: any, res) => {
+    try {
+      const { title, message } = req.body || {};
+      if (!title || !message) return res.status(400).json({ message: "title and message required" });
+      const allUsers = await storage.getAllUsers();
+      let sent = 0;
+      for (const u of allUsers) {
+        try {
+          await storage.createNotification({
+            userId: u.id,
+            type: "broadcast",
+            title,
+            message,
+            isRead: false,
+          } as any);
+          if (u.email) {
+            await sendEmail({
+              to: u.email,
+              subject: `[The Supervisor] ${title}`,
+              html: buildNotificationEmail(title, message),
+            }).catch(() => {});
+          }
+          sent++;
+        } catch {}
+      }
+      await storage.createAnnouncement({
+        title, message, audience: "all", createdBy: req.currentUser.id,
+      } as any).catch(() => {});
+      res.json({ ok: true, recipients: sent });
+    } catch (err) {
+      console.error("Broadcast failed:", err);
+      res.status(500).json({ message: "Broadcast failed" });
+    }
+  });
+
+  // U8: Org health for master CRM (last activity per org + at-risk flag)
+  app.get('/api/master/health', isSuperAdmin, async (_req, res) => {
+    try {
+      const orgs = await storage.listOrganizations();
+      const now = Date.now();
+      const result = await Promise.all(orgs.map(async (o: any) => {
+        const recent = await storage.getActivityLogs(o.id, 1).catch(() => []);
+        const lastActivity = recent[0]?.createdAt ? new Date(recent[0].createdAt) : null;
+        const daysSince = lastActivity ? Math.floor((now - lastActivity.getTime()) / (1000 * 60 * 60 * 24)) : null;
+        const isAtRisk = (daysSince === null) || daysSince > 14 || o.status === "suspended";
+        return {
+          id: o.id, name: o.name, plan: o.plan, status: o.status,
+          userCount: o.userCount, lastActivityAt: lastActivity, daysSinceActivity: daysSince, isAtRisk,
+        };
+      }));
+      res.json(result);
+    } catch (err) {
+      console.error("Health failed:", err);
+      res.status(500).json({ message: "Health failed" });
+    }
+  });
+
+  // U11: Impersonate-as
+  app.post('/api/master/impersonate/:userId', isSuperAdmin, async (req: any, res) => {
+    try {
+      const target = await storage.getUser(req.params.userId);
+      if (!target) return res.status(404).json({ message: "User not found" });
+      const sess: any = req.session;
+      sess.impersonatedFromUserId = sess.userId;
+      sess.userId = target.id;
+      await storage.logActivity({
+        organizationId: target.organizationId || null,
+        userId: req.currentUser.id,
+        action: "impersonation_started",
+        details: `${req.currentUser.email} impersonated ${target.email || target.id}`,
+      });
+      res.json({ ok: true, impersonating: target.email || target.id });
+    } catch (err) {
+      console.error("Impersonate failed:", err);
+      res.status(500).json({ message: "Impersonate failed" });
+    }
+  });
+
+  app.post('/api/master/impersonate/stop', isAuthenticated, async (req: any, res) => {
+    try {
+      const sess: any = req.session;
+      if (!sess.impersonatedFromUserId) return res.status(400).json({ message: "Not impersonating" });
+      const originalId = sess.impersonatedFromUserId;
+      sess.userId = originalId;
+      sess.impersonatedFromUserId = null;
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to stop impersonation" });
+    }
+  });
+
+  // U14: Meetings (1-on-1)
+  app.get('/api/meetings', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      if (!user?.organizationId) return res.status(404).json({ message: "No organization" });
+      const scope = req.query.scope === "all" && (user.role === "executive" || user.role === "manager")
+        ? undefined : userId;
+      const list = await storage.listMeetings({ organizationId: user.organizationId, userId: scope });
+      res.json(list);
+    } catch (err) {
+      console.error("Error listing meetings:", err);
+      res.status(500).json({ message: "Failed" });
+    }
+  });
+
+  app.post('/api/meetings', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      if (!user?.organizationId) return res.status(404).json({ message: "No organization" });
+      const { employeeId, scheduledAt, agenda } = req.body || {};
+      if (!employeeId || !scheduledAt) return res.status(400).json({ message: "employeeId and scheduledAt required" });
+      const m = await storage.createMeeting({
+        organizationId: user.organizationId,
+        managerId: user.id,
+        employeeId,
+        scheduledAt: new Date(scheduledAt),
+        agenda: agenda || null,
+      } as any);
+      // Notify the employee
+      await storage.createNotification({
+        userId: employeeId, type: "meeting_scheduled",
+        title: "1-on-1 scheduled",
+        message: `${user.firstName || user.email} scheduled a meeting on ${new Date(scheduledAt).toLocaleString()}`,
+        isRead: false,
+      } as any).catch(() => {});
+      res.json(m);
+    } catch (err) {
+      console.error("Error creating meeting:", err);
+      res.status(500).json({ message: "Failed" });
+    }
+  });
+
+  app.patch('/api/meetings/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const id = Number(req.params.id);
+      const updates: any = { ...req.body };
+      if (updates.scheduledAt) updates.scheduledAt = new Date(updates.scheduledAt);
+      const m = await storage.updateMeeting(id, updates);
+      res.json(m);
+    } catch (err) {
+      res.status(500).json({ message: "Failed" });
+    }
+  });
+
+  app.delete('/api/meetings/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      await storage.deleteMeeting(Number(req.params.id));
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ message: "Failed" });
+    }
+  });
+
+  // U15: Review templates
+  app.get('/api/review-templates', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      if (!user?.organizationId) return res.status(404).json({ message: "No organization" });
+      const list = await storage.listReviewTemplates(user.organizationId);
+      res.json(list);
+    } catch (err) {
+      res.status(500).json({ message: "Failed" });
+    }
+  });
+
+  app.post('/api/review-templates', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      if (!user?.organizationId) return res.status(404).json({ message: "No organization" });
+      if (user.role !== "executive" && user.role !== "manager" && !user.isSuperAdmin) {
+        return res.status(403).json({ message: "Only managers/executives can create templates" });
+      }
+      const { name, description, questions, isDefault } = req.body || {};
+      if (!name) return res.status(400).json({ message: "name required" });
+      const t = await storage.createReviewTemplate({
+        organizationId: user.organizationId,
+        name,
+        description: description || null,
+        questions: Array.isArray(questions) ? questions : [],
+        createdBy: user.id,
+        isDefault: !!isDefault,
+      } as any);
+      res.json(t);
+    } catch (err) {
+      console.error("Error creating template:", err);
+      res.status(500).json({ message: "Failed" });
+    }
+  });
+
+  app.delete('/api/review-templates/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
+      if (!user?.organizationId) return res.status(404).json({ message: "No organization" });
+      await storage.deleteReviewTemplate(Number(req.params.id), user.organizationId);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ message: "Failed" });
     }
   });
 

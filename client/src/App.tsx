@@ -35,9 +35,12 @@ import Billing from "@/pages/billing";
 import TeamInvites from "@/pages/team-invites";
 import OrganizationSettings from "@/pages/organization-settings";
 import AcceptInvite from "@/pages/accept-invite";
+import Meetings from "@/pages/meetings";
+import ReviewTemplates from "@/pages/review-templates";
 import NotFound from "@/pages/not-found";
 import SessionWarning from "@/components/session-warning";
 import TrialBanner from "@/components/trial-banner";
+import ImpersonationBanner from "@/components/impersonation-banner";
 
 function RoleRedirect() {
   const { user } = useAuth();
@@ -75,6 +78,7 @@ function Router() {
 
   return (
     <>
+      {isAuthenticated && <ImpersonationBanner />}
       {isAuthenticated && <TrialBanner />}
     <Switch>
       {/* Auth pages — always accessible */}
@@ -118,6 +122,8 @@ function Router() {
           <Route path="/settings" component={Settings} />
           <Route path="/analytics" component={Analytics} />
           <Route path="/org-chart" component={OrgChart} />
+          <Route path="/meetings" component={Meetings} />
+          <Route path="/review-templates" component={ReviewTemplates} />
 
           {/* Master CRM (super-admin only — gating enforced by API) */}
           <Route path="/master-crm" component={MasterCrm} />

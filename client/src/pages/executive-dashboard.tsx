@@ -4,6 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import Navbar from "@/components/layout/navbar";
 import Sidebar from "@/components/layout/sidebar";
+import OnboardingChecklist from "@/components/onboarding-checklist";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -84,6 +85,8 @@ export default function ExecutiveDashboard() {
               Welcome {user.firstName || user.email}! Strategic overview and organizational insights for leadership decisions.
             </p>
           </div>
+
+          <OnboardingChecklist />
 
           {/* Executive KPIs - Real System Data */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

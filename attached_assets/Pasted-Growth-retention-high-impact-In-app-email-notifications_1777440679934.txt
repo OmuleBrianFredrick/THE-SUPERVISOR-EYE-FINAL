@@ -1,0 +1,32 @@
+Growth & retention (high impact)
+
+In-app + email notifications — supervisors get pinged when invites are accepted, employees get notified when a goal is assigned, executives get a weekly digest
+Onboarding checklist — first-time executives see a "Get started" card (invite team → set first goal → run first review) so they activate faster
+Public signup landing for invitees — branded "You've been invited to {Org Name}" page with org logo and inviter's name
+Revenue features
+4. Real Stripe billing — actual paid plans, card capture, automatic invoice generation, plan limits enforced (e.g. Starter = 10 users)
+
+Usage limits + upgrade prompts — block adding the 11th user on Starter and show "Upgrade to add more"
+Annual billing toggle with discount — typical 20% off for annual
+Workflow depth
+7. Org chart visual — drag-and-drop reporting structure (you already have /org-chart — could make it interactive)
+
+1-on-1 meeting tracker — supervisor + employee schedule, agenda, action items
+Custom review templates — executives define their own review questions per role/department
+Goal cascading — exec sets a company OKR, managers/supervisors break it down for their teams
+Admin & trust
+11. Audit log export — download org activity as CSV for compliance
+
+Two-factor authentication — TOTP/email codes on login
+Data export / "leave the platform" — full org export for GDPR-style requests
+Custom branding per org — upload org logo, set primary color, white-label the dashboard
+Master CRM upgrades (for you as super admin)
+15. Org health scoring — flag orgs that haven't logged in in 14 days as "at risk"
+
+Revenue chart — MRR trend over time on the master dashboard
+Email broadcasts — send announcements to all users across all orgs (you have the table, just needs a send action)
+Impersonate-as feature — log into any org as read-only super admin to debug
+Mobile / reach
+19. Mobile-friendly polish — audit every page on small screens
+
+WhatsApp notifications — since you've already got the WhatsApp button, send goal reminders / review nudges via WhatsApp Business API
