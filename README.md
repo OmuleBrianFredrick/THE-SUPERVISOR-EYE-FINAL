@@ -1,477 +1,260 @@
 # 👁️ Supervisor Eye
 
-### **Hierarchical Reporting, Accountability & Operational Intelligence Platform**
+### Hierarchical Reporting, Accountability & Operational Intelligence Platform
 
 ---
 
 ## 📌 Project Description
 
-**Supervisor Eye** is a modern, enterprise-grade hierarchical reporting and accountability platform built to transform how organizations, teams, supervisors, and field workers manage operations, monitor productivity, verify completed work, and maintain transparent accountability.
+**Supervisor Eye** is a modern, full-stack enterprise platform built to enforce accountability, track work progress, and provide verifiable evidence of task completion within organizational structures.
 
-At its core, Supervisor Eye is designed to answer one critical question:
+At its core, Supervisor Eye answers one critical question:
 
-> **“Was the work actually done — and can it be verified?”**
+> **"Was the work actually done — and can it be verified?"**
 
-Unlike traditional reporting systems that rely heavily on verbal updates or basic task checklists, Supervisor Eye introduces **evidence-based reporting**, structured supervision, and role-driven operational visibility.
-
-This platform enables organizations to digitally connect workers, supervisors, managers, and executives through structured networks where reports flow upward, accountability is enforced, and productivity becomes measurable.
+Unlike traditional reporting tools, Supervisor Eye introduces **evidence-based reporting**, structured supervision, and role-driven operational visibility — connecting workers, supervisors, managers, and executives through a structured digital hierarchy.
 
 ---
 
-# 🎯 Core Mission
+## 🛠️ Tech Stack
 
-## **Track • Report • Verify**
+### Frontend
+| Technology | Purpose |
+|---|---|
+| [React 18](https://react.dev/) | UI framework |
+| [Vite](https://vitejs.dev/) | Build tool & dev server |
+| [TypeScript](https://www.typescriptlang.org/) | Type-safe development |
+| [Tailwind CSS v3](https://tailwindcss.com/) | Utility-first styling |
+| [Radix UI](https://www.radix-ui.com/) | Accessible headless components |
+| [shadcn/ui](https://ui.shadcn.com/) | Component library built on Radix |
+| [Framer Motion](https://www.framer.com/motion/) | Animations & transitions |
+| [Wouter](https://github.com/molefrog/wouter) | Lightweight client-side routing |
+| [TanStack Query v5](https://tanstack.com/query) | Server state management & data fetching |
+| [React Hook Form](https://react-hook-form.com/) | Form management |
+| [Zod](https://zod.dev/) | Schema validation |
+| [Recharts](https://recharts.org/) | Data visualisation & dashboards |
+| [Lucide React](https://lucide.dev/) | Icon library |
+| [jsPDF](https://artskydj.github.io/jsPDF/) | PDF export |
+| [date-fns](https://date-fns.org/) | Date formatting & manipulation |
 
-Supervisor Eye is designed to ensure:
+### Backend
+| Technology | Purpose |
+|---|---|
+| [Node.js](https://nodejs.org/) | Runtime environment |
+| [Express](https://expressjs.com/) | HTTP server framework |
+| [TypeScript](https://www.typescriptlang.org/) | Type-safe server code |
+| [Passport.js](https://www.passportjs.org/) | Authentication middleware |
+| [passport-local](https://www.passportjs.org/packages/passport-local/) | Username/password auth strategy |
+| [openid-client](https://github.com/panva/node-openid-client) | Google OAuth / OpenID Connect |
+| [bcryptjs](https://github.com/dcodeIO/bcrypt.js) | Password hashing |
+| [express-session](https://github.com/expressjs/session) | Session management |
+| [connect-pg-simple](https://github.com/voxpelli/node-connect-pg-simple) | PostgreSQL session store |
+| [Nodemailer](https://nodemailer.com/) | Email notifications |
+| [ws](https://github.com/websockets/ws) | WebSocket support (real-time notifications) |
+| [Nanoid](https://github.com/ai/nanoid) | Unique ID generation |
+| [Memoizee](https://github.com/medikoo/memoizee) | Function memoization |
 
-* Work is tracked
-* Progress is documented
-* Evidence is submitted
-* Supervisors verify results
-* Managers monitor teams
-* Executives gain strategic oversight
+### Database & ORM
+| Technology | Purpose |
+|---|---|
+| [PostgreSQL](https://www.postgresql.org/) | Primary relational database |
+| [Neon Serverless](https://neon.tech/) | Serverless PostgreSQL hosting |
+| [Drizzle ORM](https://orm.drizzle.team/) | Type-safe ORM & query builder |
+| [drizzle-zod](https://orm.drizzle.team/docs/zod) | Auto-generated Zod schemas from Drizzle |
 
----
-
-# 🌍 Why Supervisor Eye Exists
-
-Many organizations, NGOs, sales teams, field operations, and remote workforce structures struggle with:
-
-### Common Challenges:
-
-* Workers claiming tasks without proof
-* Poor field accountability
-* Delayed reporting
-* Weak supervisor oversight
-* Scattered communication
-* Limited operational transparency
-* Difficulty measuring team productivity
-
-### Supervisor Eye solves this by providing:
-
-✅ Hierarchical accountability
-✅ Structured workflows
-✅ Evidence-backed reports
-✅ Task assignment systems
-✅ Performance visibility
-✅ Analytics dashboards
-
----
-
-# 🧩 Key System Capabilities
-
----
-
-# 1️⃣ Organizational Network System
-
-Supervisor Eye is built around **private operational networks**.
-
-A network may represent:
-
-* A company
-* NGO
-* Department
-* Branch
-* Field office
-* Team structure
-
-## Features:
-
-* Users join or are assigned to networks
-* Network-level isolation (multi-tenant architecture)
-* Internal-only reporting visibility
-* Supervisor discovery within networks
-* Secure organizational boundaries
+### Build & Tooling
+| Technology | Purpose |
+|---|---|
+| [Vite](https://vitejs.dev/) | Frontend bundling |
+| [esbuild](https://esbuild.github.io/) | Backend bundling for production |
+| [tsx](https://github.com/privatenumber/tsx) | TypeScript execution in development |
+| [drizzle-kit](https://orm.drizzle.team/kit-docs/overview) | Database migrations |
+| [PostCSS](https://postcss.org/) | CSS processing |
+| [Autoprefixer](https://github.com/postcss/autoprefixer) | CSS vendor prefixing |
 
 ---
 
-# 2️⃣ Hierarchical Supervision Structure
+## 📁 Project Structure
 
-The system creates structured chains of command:
-
-```text id="1ukf88"
-Worker → Supervisor → Manager → Executive → Admin
 ```
-
-## Benefits:
-
-* Clear reporting lines
-* Defined responsibility
-* Team oversight
-* Organizational scalability
-
----
-
-# 3️⃣ Evidence-Based Reporting Engine
-
-Workers and teams can submit structured reports containing:
-
-### Report Fields:
-
-* Task title
-* Work completed
-* Progress summary
-* Challenges encountered
-* Pending actions
-* Recommendations
-* Date & time
-* Optional GPS location
-* Linked task or assignment
-
-### Supported Evidence:
-
-* 📸 Images
-* 🎥 Videos
-* 📄 PDFs
-* 📝 Word Documents
-* 📊 Spreadsheets
-* 📁 General file uploads
-
----
-
-# 4️⃣ Report Verification Workflow
-
-Reports are not just submitted — they are reviewed.
-
-## Workflow:
-
-```text id="xq0m10"
-Worker submits report
-        ↓
-Supervisor reviews
-        ↓
-Approve / Reject / Request Revision
-```
-
-## Status Types:
-
-* Draft
-* Submitted
-* Pending Review
-* Approved
-* Rejected
-* Needs Revision
-* Archived
-
----
-
-# 5️⃣ Task Assignment & Workflow Management
-
-Supervisors, Managers, and Admins can:
-
-### Create:
-
-* Daily tasks
-* Field tasks
-* Sales assignments
-* Inspection tasks
-* Technical jobs
-
-### Control:
-
-* Deadlines
-* Priorities
-* Instructions
-* Assigned workers
-* Evidence requirements
-
----
-
-# 6️⃣ Role-Based Access Control (RBAC)
-
-Supervisor Eye enforces strict role structures.
-
-## Roles:
-
-### 👷 Worker
-
-* Submit reports
-* View tasks
-* Upload evidence
-
-### 👨‍💼 Supervisor
-
-* Review worker reports
-* Approve/reject submissions
-* Assign tasks
-
-### 🧑‍💼 Manager
-
-* Oversee supervisors
-* Manage departments
-* Team performance
-
-### 🏢 HR
-
-* Workforce visibility
-* Compliance monitoring
-
-### 💻 IT Staff
-
-* Technical support
-* System operations
-
-### 📈 Executive
-
-* High-level analytics
-* Strategic dashboards
-
-### 👑 Superior Admin
-
-* Full platform/network control
-
----
-
-# 📊 Dashboards & Analytics
-
-Supervisor Eye includes role-specific dashboards.
-
----
-
-## Worker Dashboard
-
-* Assigned tasks
-* My reports
-* Pending reviews
-* Activity timeline
-
----
-
-## Supervisor Dashboard
-
-* Team reports
-* Pending approvals
-* Team performance
-* Productivity trends
-
----
-
-## Manager Dashboard
-
-* Department productivity
-* Supervisor summaries
-* Task performance
-* Team analytics
-
----
-
-## Executive Dashboard
-
-* KPI summaries
-* Department trends
-* Organization-wide performance
-* Strategic operational insights
-
----
-
-# 🔔 Smart Notification System
-
-Real-time notifications for:
-
-* Task assignments
-* New report submissions
-* Approval decisions
-* Rejections
-* Supervisor requests
-* Admin actions
-* Organizational announcements
-
----
-
-# 🌐 Cloud + Local Storage Architecture
-
-## Default:
-
-☁️ Cloud-based storage
-
-## Optional:
-
-🖥️ Local organization-controlled storage
-
-### Benefits:
-
-* Flexibility
-* Scalability
-* Compliance support
-* Enterprise adaptability
-
----
-
-# 📍 GPS / Field Verification (Optional)
-
-Perfect for:
-
-* Sales teams
-* NGO field teams
-* Construction inspections
-* Site visits
-* Technical deployments
-
-Reports can include:
-
-* GPS coordinates
-* Timestamp
-* Location metadata
-
----
-
-# 🔒 Security Architecture
-
-Supervisor Eye prioritizes enterprise-level security.
-
-### Includes:
-
-* JWT / Secure authentication
-* Role-based authorization
-* Multi-tenant network isolation
-* Secure file validation
-* Audit trails
-* Admin logs
-* Activity tracking
-
----
-
-# 📂 Suggested Technology Stack
-
-## Frontend:
-
-* React.js / Next.js
-* Tailwind CSS
-* Modern dashboard UI
-
-## Backend:
-
-* Django + Django REST Framework
-  **or**
-* Node.js + Express
-
-## Database:
-
-* PostgreSQL
-
-## Storage:
-
-* AWS S3
-* Firebase Storage
-* Local storage adapter
-
----
-
-# 🏗️ Core Modules
-
-```text id="n5drmb"
-Authentication System
-User Management
-Network / Organization System
-Role Permissions
-Supervisor Linking
-Task Management
-Report Engine
-Evidence Upload System
-Verification Workflow
-Notifications
-Analytics Dashboard
-Audit Logs
-Storage Management
+THE-SUPERVISOR-EYE-FINAL/
+├── client/               # React frontend (Vite root)
+│   └── src/
+│       ├── components/   # UI components (shadcn/ui + custom)
+│       ├── pages/        # Route-level page components
+│       ├── hooks/        # Custom React hooks
+│       └── lib/          # Utilities, query clients
+├── server/               # Express backend
+│   ├── index.ts          # Server entry point
+│   ├── routes.ts         # API route definitions
+│   ├── auth.ts           # Passport authentication logic
+│   └── storage.ts        # File/storage handlers
+├── shared/               # Shared between client & server
+│   └── schema.ts         # Drizzle ORM schema + Zod types
+├── .github/workflows/    # CI/CD pipeline definitions
+├── drizzle.config.ts     # Drizzle ORM configuration
+├── vite.config.ts        # Vite build configuration
+├── tsconfig.json         # TypeScript configuration
+├── tailwind.config.ts    # Tailwind CSS configuration
+└── package.json          # Dependencies & scripts
 ```
 
 ---
 
-# 🚀 Real-World Use Cases
+## ⚙️ Environment Variables
 
-Supervisor Eye is ideal for:
+Create a `.env` file in the project root with the following variables:
 
-## NGOs
+```env
+# Database (required)
+DATABASE_URL=postgresql://user:password@host:5432/dbname
 
-Track field officers, projects, and operational impact
+# Session (required)
+SESSION_SECRET=your_strong_random_secret_here
 
-## Sales Teams
+# Google OAuth (optional — for social login)
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
 
-Monitor field sales, customer visits, and performance
+# Email / Nodemailer (optional — for notifications)
+EMAIL_HOST=smtp.example.com
+EMAIL_PORT=587
+EMAIL_USER=your@email.com
+EMAIL_PASS=your_email_password
 
-## Construction Firms
-
-Track project inspections, installations, and site reports
-
-## Remote Teams
-
-Ensure accountability for distributed workers
-
-## Government / Inspection Units
-
-Evidence-based compliance tracking
-
----
-
-# 🌟 Competitive Advantage
-
-## Traditional HR Platforms:
-
-* Heavy
-* Expensive
-* HR-focused
-
-## Supervisor Eye:
-
-✅ Lightweight
-✅ Operationally focused
-✅ Evidence-driven
-✅ Field-ready
-✅ Highly scalable
+# App
+NODE_ENV=development
+```
 
 ---
 
-# 🔮 Future Roadmap
+## 🚀 Getting Started
 
-### Planned Upgrades:
+### Prerequisites
+- Node.js **v18.0.0 or higher**
+- A PostgreSQL database (local or [Neon](https://neon.tech/))
 
-* 📱 Mobile App
-* 🌍 Offline Sync
-* 🤖 AI-powered summaries
-* 🧠 Predictive analytics
-* 🧾 Payroll integration
-* 📡 Live geofencing
-* 📹 Video verification
+### Installation
 
----
+```bash
+# 1. Clone the repository
+git clone https://github.com/OmuleBrianFredrick/THE-SUPERVISOR-EYE-FINAL.git
+cd THE-SUPERVISOR-EYE-FINAL
 
-# 🤝 Contribution Guidelines
+# 2. Install dependencies
+npm install
 
-We welcome:
+# 3. Set up environment variables
+cp .env.example .env
+# Edit .env with your actual values
 
-* Feature suggestions
-* Architecture improvements
-* Security enhancements
-* UI/UX contributions
-* API integrations
+# 4. Push the database schema
+npm run db:push
 
----
+# 5. Start the development server
+npm run dev
+```
 
-# 📄 License
-
-**MIT License**
-
----
-
-# 👑 Founder’s Vision
-
-Supervisor Eye is more than software.
-
-It is a **digital supervision ecosystem** built to create:
-
-## Truth
-
-## Structure
-
-## Accountability
-
-## Visibility
+The app runs on `http://localhost:5000` by default, serving both the API and the React frontend.
 
 ---
 
-# 🧠 Final Philosophy
+## 📜 Available Scripts
 
-> **“Don’t just claim the work was done.
-> Track it. Report it. Verify it.”**
+| Script | Description |
+|---|---|
+| `npm run dev` | Start development server (frontend + backend) |
+| `npm run build` | Build frontend (Vite) and backend (esbuild) for production |
+| `npm start` | Run the production build |
+| `npm run check` | TypeScript type checking |
+| `npm run db:push` | Push Drizzle schema changes to the database |
 
 ---
+
+## 🔐 Authentication
+
+Supervisor Eye supports two authentication methods:
+
+- **Local auth** — username and password with bcrypt password hashing and PostgreSQL session storage
+- **Google OAuth** — via OpenID Connect (`openid-client` + `google-auth-library`)
+
+Sessions are stored in PostgreSQL using `connect-pg-simple`, making them persistent across server restarts.
+
+---
+
+## 👥 Role-Based Access Control (RBAC)
+
+| Role | Capabilities |
+|---|---|
+| **Worker** | Submit reports, view assigned tasks, upload evidence |
+| **Supervisor** | Review & approve/reject reports, assign tasks to workers |
+| **Manager** | Oversee supervisors, view department analytics |
+| **HR** | Workforce visibility, compliance monitoring |
+| **IT Staff** | System operations and technical support |
+| **Executive** | High-level KPI dashboards and strategic analytics |
+| **Superior Admin** | Full platform and network control |
+
+---
+
+## 📊 Core Features
+
+- **Evidence-based reporting** — attach images, videos, PDFs, and documents to reports
+- **Report verification workflow** — Draft → Submitted → Pending Review → Approved/Rejected
+- **Task assignment system** — create, assign, and track tasks with deadlines and priorities
+- **Real-time notifications** — WebSocket-powered alerts for task assignments, approvals, and rejections
+- **Role-specific dashboards** — each role sees analytics relevant to their level
+- **PDF export** — generate and download reports as PDF via jsPDF
+- **Multi-tenant architecture** — network/organisation-level isolation
+- **GPS/location metadata** — optional field location tagging on reports
+
+---
+
+## 🌍 Deployment
+
+The project is configured to run on [Replit](https://replit.com/) and is compatible with any Node.js hosting platform (Railway, Render, Fly.io, VPS, etc.).
+
+For production:
+```bash
+npm run build
+npm start
+```
+
+The build produces:
+- `dist/public/` — compiled React frontend (served as static files)
+- `dist/index.js` — compiled Express server
+
+---
+
+## 🔮 Roadmap
+
+- [ ] Mobile app (React Native)
+- [ ] Offline sync support
+- [ ] AI-powered report summarisation
+- [ ] Predictive analytics
+- [ ] Payroll integration
+- [ ] Live geofencing
+- [ ] Video verification
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome. Feel free to open issues or submit pull requests for:
+- Feature suggestions
+- Bug reports
+- Security improvements
+- UI/UX enhancements
+- API integrations
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License**.
+
+---
+
+## 👑 Built By
+
+**Omule Brian Fredrick**
+> *"Don't just claim the work was done. Track it. Report it. Verify it."*
