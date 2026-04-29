@@ -6,6 +6,10 @@ import { storage } from "./storage";
 import { OAuth2Client } from "google-auth-library";
 
 export function getSession() {
+  if (!process.env.SESSION_SECRET) {
+    throw new Error("SESSION_SECRET environment variable is required. Please set it in your .env file.");
+  }
+
   const sessionTtl = 7 * 24 * 60 * 60 * 1000;
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
@@ -15,7 +19,7 @@ export function getSession() {
     tableName: "sessions",
   });
   return session({
-    secret: process.env.SESSION_SECRET || "supervisor-platform-secret",
+    secret: process.env.SESSION_SECRET,
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
@@ -106,7 +110,7 @@ export async function setupAuth(app: Express) {
         isActive: true,
       });
 
-      // If executive just created an org, also persist owner link (already set, but ensure org is updated if user id changed)
+      // If executive just created an org, also persist owner link
       if (userRole === "executive" && organizationId) {
         await storage.updateOrganization(organizationId, { ownerExecutiveId: user.id });
       }
