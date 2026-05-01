@@ -15,14 +15,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { X, MapPin, Loader2, CheckCircle2 } from "lucide-react";
+import { X } from "lucide-react";
+import { LocationPicker } from "@/components/map/LocationPicker";
 
 interface ReportModalProps {
   onClose: () => void;
 }
 
+interface Coordinates {
+  latitude: number;
+  longitude: number;
+}
+
 // Template fields based on report type
-const TEMPLATES: Record<string, { tasksLabel: string; tasksPh: string; challengesPh: string; goalsPh: string; extra?: { label: string; key: string; ph: string }[] }> = {
+const TEMPLATES: Record<string, {
+  tasksLabel: string;
+  tasksPh: string;
+  challengesPh: string;
+  goalsPh: string;
+  extra?: { label: string; key: string; ph: string }[];
+}> = {
   weekly: {
     tasksLabel: "Tasks Completed This Week *",
     tasksPh: "List your completed tasks for this week...",
@@ -71,8 +83,8 @@ export default function ReportModal({ onClose }: ReportModalProps) {
     reference: "",
   });
 
-  const [location, setLocation] = useState<string | null>(null);
-  const [locationLoading, setLocationLoading] = useState(false);
+  // GPS coordinates stored as separate lat/lng for the database
+  const [coordinates, setCoordinates] = useState<Coordinates | null>(null);
 
   const template = TEMPLATES[formData.type] || null;
 
@@ -95,27 +107,6 @@ export default function ReportModal({ onClose }: ReportModalProps) {
   const handleChange = (field: string, value: string) =>
     setFormData(prev => ({ ...prev, [field]: value }));
 
-  const captureLocation = () => {
-    if (!navigator.geolocation) {
-      toast({ title: "Geolocation is not supported by your browser", variant: "destructive" });
-      return;
-    }
-    setLocationLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      pos => {
-        const coords = `${pos.coords.latitude.toFixed(6)},${pos.coords.longitude.toFixed(6)}`;
-        setLocation(coords);
-        setLocationLoading(false);
-        toast({ title: "Location captured", description: coords });
-      },
-      () => {
-        setLocationLoading(false);
-        toast({ title: "Could not get location", description: "Check your browser's location permissions.", variant: "destructive" });
-      },
-      { timeout: 10000 }
-    );
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -136,7 +127,13 @@ export default function ReportModal({ onClose }: ReportModalProps) {
       tasksCompleted: tasksContent,
       challengesFaced: formData.challengesFaced,
       goalsNextPeriod: formData.goalsNextPeriod,
-      location: location || undefined,
+      // Send coordinates as separate fields so they're stored in the database
+      latitude: coordinates?.latitude ?? null,
+      longitude: coordinates?.longitude ?? null,
+      // Keep location as human-readable string for backwards compatibility
+      location: coordinates
+        ? `${coordinates.latitude.toFixed(6)}, ${coordinates.longitude.toFixed(6)}`
+        : undefined,
     });
   };
 
@@ -240,55 +237,27 @@ export default function ReportModal({ onClose }: ReportModalProps) {
             />
           </div>
 
-          {/* GPS Location */}
+          {/* GPS Location — full map picker */}
           <div className="space-y-1.5">
             <Label>Field Location (Optional)</Label>
-            {location ? (
-              <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-green-700">Location captured</p>
-                  <p className="text-xs text-green-600 font-mono">{location}</p>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setLocation(null)}
-                  className="text-green-700 hover:text-green-900 shrink-0"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={captureLocation}
-                disabled={locationLoading}
-                className="w-full border-dashed border-gray-300 text-gray-600 hover:border-blue-400 hover:text-blue-600"
-              >
-                {locationLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Getting location...
-                  </>
-                ) : (
-                  <>
-                    <MapPin className="h-4 w-4 mr-2" />
-                    Capture GPS Location
-                  </>
-                )}
-              </Button>
-            )}
-            <p className="text-xs text-gray-400">
-              Captures your current GPS coordinates as evidence of field activity.
+            <LocationPicker
+              value={coordinates}
+              onChange={setCoordinates}
+            />
+            <p className="text-xs text-muted-foreground">
+              Captures your GPS coordinates as verifiable evidence of field activity.
+              You can use your current location or pin it manually on the map.
             </p>
           </div>
 
           {/* Submit */}
           <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
-            <Button type="button" variant="outline" onClick={onClose} disabled={createReportMutation.isPending}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={createReportMutation.isPending}
+            >
               Cancel
             </Button>
             <Button
