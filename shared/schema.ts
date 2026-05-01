@@ -33,9 +33,9 @@ export const organizations = pgTable("organizations", {
   country: varchar("country"),
   contactEmail: varchar("contact_email"),
   phone: varchar("phone"),
-  plan: varchar("plan").default("trial"), // trial, starter, professional, enterprise
-  status: varchar("status").default("active"), // active, trial, suspended, pending
-  billingPeriod: varchar("billing_period").default("monthly"), // monthly | annual
+  plan: varchar("plan").default("trial"),
+  status: varchar("status").default("active"),
+  billingPeriod: varchar("billing_period").default("monthly"),
   monthlyRateCents: integer("monthly_rate_cents").default(0),
   trialEndsAt: timestamp("trial_ends_at"),
   suspendedAt: timestamp("suspended_at"),
@@ -88,6 +88,9 @@ export const reports = pgTable("reports", {
   rating: integer("rating"),
   attachments: jsonb("attachments"),
   location: varchar("location"),
+  // ─── GPS coordinates for field geo-targeting ───
+  latitude: decimal("latitude", { precision: 10, scale: 7 }),
+  longitude: decimal("longitude", { precision: 10, scale: 7 }),
   taskId: integer("task_id"),
   submittedAt: timestamp("submitted_at").defaultNow(),
   reviewedAt: timestamp("reviewed_at"),
@@ -179,7 +182,7 @@ export const invoices = pgTable("invoices", {
   id: serial("id").primaryKey(),
   organizationId: integer("organization_id").notNull(),
   amountCents: integer("amount_cents").notNull(),
-  status: varchar("status").default("pending"), // pending, paid, overdue, cancelled
+  status: varchar("status").default("pending"),
   description: text("description"),
   issuedAt: timestamp("issued_at").defaultNow(),
   paidAt: timestamp("paid_at"),
@@ -199,8 +202,8 @@ export const announcements = pgTable("announcements", {
   id: serial("id").primaryKey(),
   title: varchar("title").notNull(),
   message: text("message").notNull(),
-  audience: varchar("audience").default("all"), // all, executives, single_org
-  organizationId: integer("organization_id"), // when audience=single_org
+  audience: varchar("audience").default("all"),
+  organizationId: integer("organization_id"),
   createdBy: varchar("created_by"),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -316,7 +319,7 @@ export const invitations = pgTable("invitations", {
   supervisorId: varchar("supervisor_id"),
   department: varchar("department"),
   token: varchar("token").notNull().unique(),
-  status: varchar("status").notNull().default("pending"), // pending, accepted, revoked, expired
+  status: varchar("status").notNull().default("pending"),
   invitedById: varchar("invited_by_id"),
   expiresAt: timestamp("expires_at").notNull(),
   acceptedAt: timestamp("accepted_at"),
